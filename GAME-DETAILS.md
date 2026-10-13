@@ -13,11 +13,7 @@ added separately; this Studio change alone does not add a screen to the handheld
    source/attribution. Box art already downloaded from libretro is available as a
    fallback. Upload a PNG, JPEG or WebP for custom or pre-rendered 3D box artwork;
    uploads become PNGs no larger than 720 pixels on either side.
-4. Alternatively, select GBA, GB or GBC and **Import gamelist** to import an existing
-   ROCKNIX/EmulationStation `gamelist.xml`. Titles and descriptions are matched to
-   the original ROM filename on that platform, including region tags. This imports
-   text, not referenced image files; add those in each cartridge editor.
-5. Click **Download game details** and merge its `Metadata` and `Artwork` folders
+4. Click **Download game details** and merge its `Metadata` and `Artwork` folders
    into the card root. The label-writing/download buttons continue to export only
    the existing label/shell format. Do not replace whole card folders.
 
@@ -64,9 +60,22 @@ The public collection is not automatically populated by this PR.
 The existing local harvester now supports `metadata` alongside image media:
 
 ```sh
-python3 tools/harvest.py --card /path/to/card --out /path/to/art-set \
+python3 tools/harvest.py --dat all --out /path/to/art-set \
   --media wheel,look,support-texture,box-3D,metadata
 ```
+
+This builds our own checksum-indexed collection directly from ScreenScraper for
+GB, GBC and GBA, using the existing harvester. No-Intro DATs enumerate ROMs; they
+are not the source of descriptions or artwork. Use `--card /path/to/card` instead
+of `--dat all` for just your games, or add `--limit 10` for a small trial. Re-running
+the same command resumes the collection and preserves existing label media.
+
+The result is ordinary static files: `index.json`, `<platform>/metadata/<CRC>.json`
+and `<platform>/box-3D/<CRC>.png`. Host the output folder on a static HTTPS host
+(with CORS enabled if separate from Studio). Open Studio with
+`?art=https://YOUR-HOST/art-set/` to use that collection. GitHub Pages can serve
+these files; there is no runtime server or scraper in the browser. The existing
+upstream art endpoint remains the default until our dataset is published.
 
 As before, ScreenScraper credentials are provided through the existing environment
 variables to the local harvester, never embedded in the website. Publish the resulting
@@ -75,8 +84,9 @@ requirements. Descriptions prefer English and omit unavailable fields.
 
 ## Verification
 
+Install the harvester dependencies with `python3 -m pip install Pillow numpy`.
 Run `npm ci --ignore-scripts && npm test` and
-`python3 -m unittest discover -s tools -p 'test_game_details.py'`.
+`python3 -m unittest discover -s tools -p 'test_*.py'`.
 Tests cover legacy label/card behavior, optional/missing files, path validation,
-platform matching, bounded text, entity rejection and metadata extraction. Browser
+bounded text, scraper resume behavior and metadata extraction. Browser
 interaction and device rendering still need testing before release.

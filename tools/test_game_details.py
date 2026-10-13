@@ -12,5 +12,20 @@ class DetailsTests(unittest.TestCase):
         self.assertNotIn('description', metadata({'synopsis': None, 'dates': [None]}))
         self.assertEqual(metadata({})['version'], 1)
 
+    def test_titles_and_dates_follow_the_rom_region(self):
+        game = {'noms': [{'region': 'us', 'text': 'US title'}, {'region': 'jp', 'text': 'JP title'}],
+                'dates': [{'region': 'us', 'text': '2002-01-01'}, {'region': 'jp', 'text': '2001-12-01'}]}
+        result = metadata(game, ('jp', 'us'))
+        self.assertEqual(result['title'], 'JP title')
+        self.assertEqual(result['year'], '2001')
+
+    def test_malformed_optional_values_and_text_limits(self):
+        result = metadata({'synopsis': [None, {'langue': None, 'text': 'x' * 9000}],
+                           'noms': 'invalid', 'dates': [None, {'text': 'unknown'}]})
+        self.assertEqual(len(result['description']), 8192)
+        self.assertNotIn('title', result)
+        self.assertNotIn('year', result)
+        self.assertEqual(metadata(None)['version'], 1)
+
 if __name__ == '__main__':
     unittest.main()

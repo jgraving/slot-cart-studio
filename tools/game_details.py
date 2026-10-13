@@ -1,24 +1,38 @@
-"""Extract optional display text from ScreenScraper's existing game response."""
+"""Compile optional display text from the harvester's ScreenScraper response."""
+import re
 
-def metadata(game):
+
+def metadata(game, regions=('us', 'wor', 'eu', 'jp')):
     def text(value):
         if isinstance(value, dict):
             value = value.get('text', '')
-        return str(value).strip()[:8192] if isinstance(value, (str, int)) else ''
-    def english(items, field='text'):
-        if not isinstance(items, list):
+        if not isinstance(value, (str, int)):
             return ''
-        ordered = sorted((i for i in items if isinstance(i, dict)),
-                         key=lambda i: i.get('langue', '').lower() not in ('en', 'eng'))
-        return next((text(i.get(field)) for i in ordered if text(i.get(field))), '')
+        return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', str(value)).strip()[:8192]
+
+    def items(value):
+        return [i for i in value if isinstance(i, dict)] if isinstance(value, list) else []
+
+    def english(value):
+        ordered = sorted(items(value),
+                         key=lambda i: str(i.get('langue', '')).lower() not in ('en', 'eng'))
+        return next((text(i) for i in ordered if text(i)), '')
+
+    def regional(value):
+        def rank(item):
+            region = str(item.get('region', '')).lower()
+            return regions.index(region) if region in regions else len(regions)
+        return next((text(i) for i in sorted(items(value), key=rank) if text(i)), '')
+
+    if not isinstance(game, dict):
+        game = {}
     result = {'version': 1, 'source': 'ScreenScraper · https://www.screenscraper.fr/'}
+    result['title'] = regional(game.get('noms'))[:256]
     result['description'] = english(game.get('synopsis'))
     for field, key in [('developer', 'developpeur'), ('publisher', 'editeur'), ('players', 'joueurs')]:
         result[field] = text(game.get(key))[:256]
-    genres = game.get('genres', [])
-    if isinstance(genres, list):
-        result['genre'] = ', '.join(filter(None, (english(g.get('noms')) for g in genres if isinstance(g, dict))))[:256]
-    dates = game.get('dates', [])
-    if isinstance(dates, list):
-        result['year'] = next((text(d.get('text'))[:4] for d in dates if isinstance(d, dict) and text(d.get('text'))[:4].isdigit()), '')
+    result['genre'] = ', '.join(dict.fromkeys(filter(None,
+        (english(g.get('noms')) for g in items(game.get('genres'))))))[:256]
+    date = regional([d for d in items(game.get('dates')) if re.match(r'^\d{4}', text(d))])
+    result['year'] = date[:4]
     return {k: v for k, v in result.items() if v}

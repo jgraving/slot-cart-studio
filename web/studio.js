@@ -1,4 +1,4 @@
-import { detailsEntries, importGamelist, normalizeDetails, readDetails } from './game-details.js';
+import { detailsEntries, normalizeDetails, readDetails } from './game-details.js';
 // slot cart studio. Everything that needs a browser lives here: the card, the network and the page.
 // Everything that decides what a label looks like is Rust, in pkg/.
 
@@ -707,7 +707,7 @@ async function dress(s, c) {
   const [cover, box3d, metadata] = await Promise.all([boxJob, threeDimensionalBox, metadataJob]);
   const box = cover;
   if (metadata && !c.details) {
-    try { const parsed = JSON.parse(new TextDecoder().decode(metadata)); c.details = normalizeDetails(parsed); }
+    try { const parsed = JSON.parse(new TextDecoder().decode(metadata)); if (parsed?.version === 1) c.details = normalizeDetails(parsed); }
     catch { /* Missing or malformed metadata does not affect cartridge artwork. */ }
   }
   if (s !== session || fatal) return;
@@ -1214,18 +1214,4 @@ $('details-export').addEventListener('click', async () => {
     download(new Blob(parts, {type: 'application/zip'}), 'game-details.zip');
   } catch (error) { banner(`Game details export failed: ${error.message}`); }
   finally { if (!finished) zip.free(); }
-});
-
-$('details-import').addEventListener('change', async event => {
-  const file = event.target.files?.[0], s = session;
-  event.target.value = '';
-  if (!file || !s) { banner('Choose the games card first.'); return; }
-  try {
-    if (file.size > 2 * 1024 * 1024) throw new Error('Choose a gamelist smaller than 2 MB');
-    const text = await file.text();
-    if (s !== session) return;
-    const count = importGamelist(text, $('details-platform').value, s.carts);
-    banner(`Imported details for ${count} games. Box images can be added in each cartridge editor.`);
-    editor.refresh();
-  } catch (error) { banner(`Import failed: ${error.message}`); }
 });

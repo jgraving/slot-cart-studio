@@ -308,7 +308,7 @@ def main():
                     help='every dump a platform has, not just a card; "all" for every platform')
     ap.add_argument('--out', help='where the set is written')
     ap.add_argument('--media', default='wheel,look,support-texture',
-                    help='comma separated ScreenScraper media types, or look for the label measured from the cart scan')
+                    help='comma separated ScreenScraper media types, metadata for game details, or look for measured label colours')
     ap.add_argument('--relook', action='store_true', help='measure every look again')
     ap.add_argument('--reregion', action='store_true', help='fetch every media again for dumps whose own region is not USA')
     ap.add_argument('--probe', help='print every media one rom has, and stop')
@@ -390,7 +390,9 @@ def main():
         got, measured = [], None
         for want in todo:
             if want == 'metadata':
-                body = (json.dumps(metadata(game), ensure_ascii=False, indent=2) + '\n').encode()
+                if not game:
+                    continue  # An unmatched game must remain eligible for a later retry.
+                body = (json.dumps(metadata(game, regions), ensure_ascii=False, indent=2) + '\n').encode()
                 if save(body, root / want / f'{crc}.json'):
                     got.append(want)
                 continue

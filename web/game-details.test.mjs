@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeDetails, detailsEntries, detailsPath } from './game-details.js';
+import { normalizeDetails, detailsEntries, detailsPath, readDetails } from './game-details.js';
 test('missing optional data produces no files and does not alter cartridge identity', () => {
   const c = { platform: 'GBA', stem: 'Same' };
   assert.deepEqual(detailsEntries(c), []);
@@ -21,19 +21,6 @@ test('exports bounded text and image sidecars keyed by original platform and fil
 test('rejects paths that escape the optional folders', () => {
   for (const stem of ['../game', '.', '..', 'folder/game', 'a\\b', 'a\0b']) assert.throws(() => detailsPath('GBA', stem));
   assert.throws(() => detailsPath('SNES', 'game'));
-});
-import { DOMParser } from '@xmldom/xmldom';
-import { importGamelist, readDetails } from './game-details.js';
-test('imports descriptions by original filename and selected platform, preserving missing fields', () => {
-  const gba = { platform: 'GBA', stem: 'Same (USA)', details: { developer: 'Keep me' } };
-  const gb = { platform: 'GB', stem: 'Same (USA)' };
-  const xml = '<gameList><game><path>./Same (USA).gba</path><name>Friendly title</name><desc>Text &amp; more</desc><releasedate>20040321T000000</releasedate></game></gameList>';
-  assert.equal(importGamelist(xml, 'GBA', [gba, gb], DOMParser), 1);
-  assert.equal(gba.details.description, 'Text & more');
-  assert.equal(gba.details.developer, 'Keep me');
-  assert.equal(gba.details.year, '2004');
-  assert.equal(gb.details, undefined);
-  assert.throws(() => importGamelist('<!DOCTYPE x><gameList/>', 'GBA', [gba], DOMParser));
 });
 test('optional readers tolerate absent files and reject malformed versions without altering ROMs', async () => {
   const cart = { platform: 'GBA', stem: 'Game' };

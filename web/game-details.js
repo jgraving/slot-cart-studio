@@ -1,8 +1,8 @@
-import { commit } from './history.js';
 // Optional sidecars. Existing cartridge/label exports deliberately remain unchanged.
 export const FIELDS = ['title', 'description', 'developer', 'publisher', 'year', 'genre', 'players', 'source'];
 const limits = { description: 8192, source: 1024 };
 export function normalizeDetails(input = {}) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) input = {};
   const result = { version: 1 };
   for (const field of FIELDS) {
     if (typeof input[field] !== 'string') continue;
@@ -39,30 +39,6 @@ export async function pngBox(file) {
     if (!blob) throw new Error('Could not convert artwork');
     return new Uint8Array(await blob.arrayBuffer());
   } finally { bitmap.close(); }
-}
-
-export function importGamelist(xml, platform, carts, Parser = DOMParser) {
-  if (xml.length > 2 * 1024 * 1024 || /<!DOCTYPE|<!ENTITY/i.test(xml)) throw new Error('Choose a gamelist smaller than 2 MB without external entities');
-  if (!['GBA', 'GB', 'GBC'].includes(platform)) throw new Error('Choose a platform');
-  const document = new Parser().parseFromString(xml, 'application/xml');
-  if (document.getElementsByTagName('parsererror').length || document.documentElement?.tagName !== 'gameList') throw new Error('Invalid EmulationStation gamelist');
-  const byStem = new Map(carts.filter(c => c.platform === platform).map(c => [c.stem.normalize('NFC'), c]));
-  const fields = { name: 'title', desc: 'description', developer: 'developer', publisher: 'publisher', genre: 'genre', players: 'players' };
-  let count = 0;
-  for (const game of Array.from(document.getElementsByTagName('game')).slice(0, 10000)) {
-    const value = tag => Array.from(game.childNodes).find(n => n.nodeType === 1 && n.tagName === tag)?.textContent?.trim() ?? '';
-    const file = value('path').split(/[\\/]/).pop();
-    if (!file || !/\.(gba|gb|gbc)$/i.test(file)) continue;
-    const cart = byStem.get(file.replace(/\.[^.]+$/, '').normalize('NFC'));
-    if (!cart) continue;
-    const details = {};
-    for (const [tag, field] of Object.entries(fields)) if (value(tag)) details[field] = value(tag);
-    if (/^\d{4}/.test(value('releasedate'))) details.year = value('releasedate').slice(0, 4);
-    details.source = 'Imported EmulationStation gamelist';
-    commit(cart, () => { cart.details = normalizeDetails({ ...cart.details, ...details }); });
-    count++;
-  }
-  return count;
 }
 
 export async function readDetails(source, cart) {

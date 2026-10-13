@@ -6,7 +6,7 @@ frontend draws. Runs in the browser at [studio.slot-cfw.fyi](https://studio.slot
 ## Optional game details
 
 This fork adds box art, descriptions and optional metadata exports without changing
-the existing label format. See [Game details](GAME-DETAILS.md) for importing, exporting
+the existing label format. See [Game details](GAME-DETAILS.md) for scraping, editing, exporting
 and the device-reader compatibility contract.
 
 ## License
