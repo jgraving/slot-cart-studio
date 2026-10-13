@@ -5,6 +5,13 @@ information is a separate optional layer. Old slot versions can use the labels a
 before and ignore the new folders. A matching device-side details reader will be
 added separately; this Studio change alone does not add a screen to the handheld.
 
+## Get metadata with a normal account
+
+Use the [local Skyscraper helper](SCRAPING.md) to collect your own game details
+and render box artwork. It needs a normal ScreenScraper account and keeps the
+collection local. The custom developer-API harvester described further below
+is an advanced alternative, not required for this workflow.
+
 ## Use it
 
 1. Choose the games card in Cart Studio as usual.
