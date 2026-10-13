@@ -118,6 +118,14 @@ export async function fromDirectory(root) {
   return {
     carts: carts.sort(byCart),
     labels,
+    async readOptional(path) {
+      try {
+        const parts = path.split('/');
+        let dir = root;
+        for (const part of parts.slice(0, -1)) dir = await dir.getDirectoryHandle(part);
+        return await (await dir.getFileHandle(parts.at(-1))).getFile();
+      } catch (error) { if (error.name === 'NotFoundError') return null; throw error; }
+    },
     direct: true,
     systemShells,
     labelShells,
@@ -174,8 +182,10 @@ export function fromFiles(files) {
   let sawPlatform = false;
   let loose = false;
   const shellFiles = {};
+  const optionalFiles = new Map();
   for (const file of files) {
     const parts = file.webkitRelativePath.split('/');
+    if (parts.length === 4 && ['metadata', 'artwork'].includes(parts[1].toLowerCase()) && parts.slice(2).every(visible)) optionalFiles.set(parts.slice(1).join('/').normalize('NFC').toLowerCase(), file);
     if (parts.length >= 3 && parts[1].toLowerCase() === 'labels' && parts.slice(2).every(visible)) {
       labelFiles.push({ path: ['Labels', ...parts.slice(2)].join('/'), file: async () => file });
     }
@@ -210,6 +220,7 @@ export function fromFiles(files) {
     carts: carts.sort(byCart),
     labels,
     labelFiles,
+    readOptional: async path => optionalFiles.get(path.normalize('NFC').toLowerCase()) ?? null,
     direct: false,
     write: null,
     systemShells: () => text(shellFiles.config ?? shellFiles.system),

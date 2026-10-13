@@ -3,6 +3,12 @@
 Cart labels for a [slot](https://slot-cfw.fyi) SD card, previewed on the same cart face the
 frontend draws. Runs in the browser at [studio.slot-cfw.fyi](https://studio.slot-cfw.fyi).
 
+## Optional game details
+
+This fork adds box art, descriptions and optional metadata exports without changing
+the existing label format. See [Game details](GAME-DETAILS.md) for importing, exporting
+and the device-reader compatibility contract.
+
 ## License
 
 GPL-3.0-or-later, same as slot. See [LICENSE](LICENSE).

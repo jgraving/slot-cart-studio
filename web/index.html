@@ -50,6 +50,9 @@
 
   <div class="shelf-bar">
     <nav class="shelf-tabs" id="tabs" aria-label="Platforms" hidden></nav>
+    <select id="details-platform" aria-label="Gamelist platform"><option value="GBA">GBA</option><option value="GB">GB</option><option value="GBC">GBC</option></select>
+    <label class="key dark">Import gamelist<input id="details-import" type="file" accept=".xml" class="visually-hidden"></label>
+    <button class="key dark" id="details-export" type="button" hidden>Download game details</button>
     <button class="key dark fill-open" id="fill-open" type="button" hidden>Fill unlabelled carts…</button>
     <div class="write-bar" id="write-bar" hidden>
       <span class="eject" id="eject" role="status" hidden>Eject the card before you take it out, or slot may not find your games.</span>
@@ -93,6 +96,21 @@
         </div>
       </div>
     </div>
+    <details class="game-details">
+      <summary>Box art &amp; game details (optional)</summary>
+      <p>Exported separately from labels. Older slot versions ignore these extra files.</p>
+      <img id="ed-box-preview" alt="Game box artwork" hidden>
+      <label>Box artwork <input id="ed-box-file" type="file" accept="image/png,image/jpeg,image/webp"></label>
+      <button class="key dark" id="ed-box-clear" type="button">Use downloaded cover</button>
+      <label>Title<input id="ed-detail-title" type="text" maxlength="256"></label>
+      <label>Developer<input id="ed-detail-developer" type="text" maxlength="256"></label>
+      <label>Publisher<input id="ed-detail-publisher" type="text" maxlength="256"></label>
+      <label>Year<input id="ed-detail-year" type="text" maxlength="256"></label>
+      <label>Genre<input id="ed-detail-genre" type="text" maxlength="256"></label>
+      <label>Players<input id="ed-detail-players" type="text" maxlength="256"></label>
+      <label>Metadata source / attribution<input id="ed-detail-source" type="text" maxlength="1024"></label>
+      <label>Description<textarea id="ed-detail-description" rows="6" maxlength="8192"></textarea></label>
+    </details>
     <hr>
     <div class="ed-label" id="ed-label-section">
       <span class="k">Label</span>

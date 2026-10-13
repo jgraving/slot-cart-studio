@@ -1,3 +1,4 @@
+import { detailsEntries, importGamelist, normalizeDetails, readDetails } from './game-details.js';
 // slot cart studio. Everything that needs a browser lives here: the card, the network and the page.
 // Everything that decides what a label looks like is Rust, in pkg/.
 
@@ -578,6 +579,8 @@ async function identify(s) {
   for (const [i, c] of s.carts.entries()) {
     if (s !== session || fatal) return;
     progress(i, total, c.stem);
+    try { await readDetails(s.source, c); }
+    catch (error) { logError(`Optional details: ${c.stem}`, error); }
     try {
       const file = await c.file();
       const head = new Uint8Array(await file.slice(0, HEAD).arrayBuffer());
@@ -692,6 +695,8 @@ async function dress(s, c) {
   // The ground's colour is read off the box art, so that request starts now and is waited on
   // after the logo.
   const boxJob = thumb('Named_Boxarts');
+  const threeDimensionalBox = ours('box-3D');
+  const metadataJob = ours('metadata');
   if (!c.logoBytes) {
     const logo = await ours('wheel');
     if (s !== session || fatal) return;
@@ -699,8 +704,14 @@ async function dress(s, c) {
     // How bright the logo is decides which way its ground goes, so it is measured with the logo.
     c.logoLuma = c.logoBytes ? logo_luma(c.logoBytes) : 255;
   }
-  const box = await boxJob;
+  const [cover, box3d, metadata] = await Promise.all([boxJob, threeDimensionalBox, metadataJob]);
+  const box = cover;
+  if (metadata && !c.details) {
+    try { const parsed = JSON.parse(new TextDecoder().decode(metadata)); c.details = normalizeDetails(parsed); }
+    catch { /* Missing or malformed metadata does not affect cartridge artwork. */ }
+  }
   if (s !== session || fatal) return;
+  c.boxBytes = box3d ?? cover;
   c.boxHue = box ? (box_hue(box) ?? null) : null;
   if (!c.userHue) c.deep = null;
   c.dressed = true;
@@ -741,6 +752,7 @@ function showPlatform(p) {
 }
 
 function updateWriteBar() {
+  $('details-export').hidden = !session;
   if (!session) return;
   const n = readyCarts().length + shellChanges().length;
   $('write-bar').hidden = n === 0 && !writing && $('eject').hidden;
@@ -1184,3 +1196,36 @@ $('build').append(
       }),
 );
 start();
+
+$('details-export').addEventListener('click', async () => {
+  const s = session;
+  if (!s || writing || fatal) return;
+  const zip = new Zip(), parts = [];
+  let count = 0, finished = false;
+  try {
+    for (const cart of s.carts) {
+      for (const entry of detailsEntries(cart)) {
+        zip.add(entry.path, entry.bytes); parts.push(zip.take()); count++;
+      }
+    }
+    if (!count) { banner('Add game details or box artwork to a cartridge first.'); return; }
+    parts.push(zip.finish());
+    finished = true;
+    download(new Blob(parts, {type: 'application/zip'}), 'game-details.zip');
+  } catch (error) { banner(`Game details export failed: ${error.message}`); }
+  finally { if (!finished) zip.free(); }
+});
+
+$('details-import').addEventListener('change', async event => {
+  const file = event.target.files?.[0], s = session;
+  event.target.value = '';
+  if (!file || !s) { banner('Choose the games card first.'); return; }
+  try {
+    if (file.size > 2 * 1024 * 1024) throw new Error('Choose a gamelist smaller than 2 MB');
+    const text = await file.text();
+    if (s !== session) return;
+    const count = importGamelist(text, $('details-platform').value, s.carts);
+    banner(`Imported details for ${count} games. Box images can be added in each cartridge editor.`);
+    editor.refresh();
+  } catch (error) { banner(`Import failed: ${error.message}`); }
+});

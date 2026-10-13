@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test web/*.test.mjs" },
+  "devDependencies": { "@xmldom/xmldom": "0.9.12" }
+}

@@ -1,3 +1,4 @@
+import { FIELDS, pngBox } from './game-details.js';
 // One panel for everything about one cart. It keeps no cart state: every change goes through the
 // studio's api, one history step at a time.
 import { canRedo, canRevert, canUndo, commit, redo, revert, undo, visit, visited } from './history.js';
@@ -138,7 +139,19 @@ export function createEditor(api) {
     }
   }
 
+  let boxUrl = null;
+  function refreshDetails() {
+    if (!cart) return;
+    for (const field of FIELDS) $('ed-detail-' + field).value = cart.details?.[field] ?? '';
+    if (boxUrl) URL.revokeObjectURL(boxUrl);
+    const bytes = cart.customBoxBytes ?? cart.boxBytes;
+    boxUrl = bytes ? URL.createObjectURL(new Blob([bytes], { type: 'image/png' })) : null;
+    $('ed-box-preview').hidden = !boxUrl;
+    if (boxUrl) $('ed-box-preview').src = boxUrl;
+    else $('ed-box-preview').removeAttribute('src');
+  }
   function refresh() {
+    refreshDetails();
     const c = cart;
     if (!c) return;
     if (!visited(c)) visit(c);
@@ -207,6 +220,8 @@ export function createEditor(api) {
     if (!cart) return;
     cart.el.root.classList.remove('current');
     cart = null;
+    if (boxUrl) URL.revokeObjectURL(boxUrl);
+    boxUrl = null;
     closePops();
     panel.hidden = true;
     document.body.classList.remove('editing');
@@ -234,6 +249,26 @@ export function createEditor(api) {
     $(id).addEventListener('focusout', () => tip(null));
   }
 
+  for (const field of FIELDS) {
+    $('ed-detail-' + field).addEventListener('input', (event) => {
+      if (!cart) return;
+      commit(cart, () => { cart.details = { ...cart.details, [field]: event.target.value }; });
+      $('ed-undo').disabled = !canUndo(cart);
+      $('ed-redo').disabled = !canRedo(cart);
+      $('ed-revert').disabled = !canRevert(cart);
+    });
+  }
+  $('ed-box-file').addEventListener('change', async (event) => {
+    const c = cart, file = event.target.files?.[0];
+    event.target.value = '';
+    if (!c || !file) return;
+    try { const bytes = await pngBox(file); change(() => { c.customBoxBytes = bytes; }, c); }
+    catch (error) { alert(error.message); }
+  });
+  $('ed-box-clear').addEventListener('click', () => {
+    if (!cart) return;
+    change(() => { cart.customBoxBytes = null; });
+  });
   $('ed-close').addEventListener('click', close);
 
   $('ed-game').addEventListener('click', () => {
@@ -327,7 +362,7 @@ export function createEditor(api) {
       e.preventDefault();
       return;
     }
-    if (!(e.metaKey || e.ctrlKey) || e.target.matches('input[type="search"]')) return;
+    if (!(e.metaKey || e.ctrlKey) || e.target.matches('input, textarea')) return;
     const key = e.key.toLowerCase();
     if (key === 'z' && !e.shiftKey) step(undo);
     else if ((key === 'z' && e.shiftKey) || key === 'y') step(redo);

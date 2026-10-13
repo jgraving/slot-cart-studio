@@ -46,6 +46,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zlib
+from game_details import metadata
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -266,7 +267,7 @@ def todo_for(crc, wanted, index, root, relook, redo=False):
     def needed(w):
         if w == 'look':
             return relook or 'look' not in index.get(crc, {})
-        return not (root / w / f'{crc}.png').exists()
+        return not (root / w / f'{crc}.{"json" if w == "metadata" else "png"}').exists()
     return [w for w in wanted if needed(w)]
 
 
@@ -384,9 +385,15 @@ def main():
                 n['missed'] += 1
             print(f'  {name}: {type(e).__name__}')
             return
-        medias = ((data or {}).get('response', {}).get('jeu') or {}).get('medias', [])
+        game = ((data or {}).get('response', {}).get('jeu') or {})
+        medias = game.get('medias', [])
         got, measured = [], None
         for want in todo:
+            if want == 'metadata':
+                body = (json.dumps(metadata(game), ensure_ascii=False, indent=2) + '\n').encode()
+                if save(body, root / want / f'{crc}.json'):
+                    got.append(want)
+                continue
             m = pick(medias, SOURCE.get(want, want), regions)
             try:
                 body = fetch(m['url']) if m else None
@@ -403,7 +410,7 @@ def main():
                 n['saved'] += len(got)
                 entry = index.setdefault(crc, {})
                 for w in got:
-                    entry[w] = measured if w == 'look' else str((root / w / f'{crc}.png').relative_to(args.out))
+                    entry[w] = measured if w == 'look' else str((root / w / f'{crc}.{"json" if w == "metadata" else "png"}').relative_to(args.out))
             else:
                 n['missed'] += 1
             n['done'] += 1

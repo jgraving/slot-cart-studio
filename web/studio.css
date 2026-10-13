@@ -318,3 +318,10 @@ body.editing .cart:not(.current){opacity:.45}
 .tile .badge.on-card{background:var(--shell-accent);color:var(--opening)}
 .tile .add{display:grid;place-items:center;aspect-ratio:1.6;border:2px dashed #55555f;border-radius:4px;color:var(--muted);font-size:24px}
 .tile.has-file .add{display:none}
+
+.game-details { margin: 20px 0; }
+.game-details summary { cursor: pointer; font-weight: 700; }
+.game-details label { display: block; margin: 12px 0; }
+.game-details input, .game-details textarea { display: block; width: 100%; box-sizing: border-box; padding: 8px; font: inherit; }
+#ed-box-preview { display: block; max-width: 100%; max-height: 240px; margin: 12px auto; object-fit: contain; }
+#ed-box-preview[hidden] { display: none; }

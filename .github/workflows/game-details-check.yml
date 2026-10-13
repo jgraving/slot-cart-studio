@@ -1,0 +1,21 @@
+name: Game details checks
+on:
+  pull_request:
+  push:
+    branches: [optional-game-details]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: node --check web/studio.js && node --check web/editor.js
+      - run: python3 -m unittest discover -s tools -p 'test_game_details.py'
+      - run: python3 -m py_compile tools/harvest.py
