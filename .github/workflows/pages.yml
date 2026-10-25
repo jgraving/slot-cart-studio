@@ -1,84 +1,57 @@
-name: pages
+name: Build Cart Studio
 
-# The page is static, but its WASM is built from this crate and from four of slot's own source
-# files, which is why slot is checked out beside it at the commit slot.ref names.
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
-# One deploy at a time, and never cancelling one on its way out. A cancelled deploy-pages leaves
-# the site on whatever half of the artifact made it.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: studio-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  deploy:
-    name: studio
+  build:
+    name: Test and build browser app
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
         with:
           path: slot-cart-studio
-
       - id: pin
         run: echo "ref=$(cat slot-cart-studio/slot.ref)" >> "$GITHUB_OUTPUT"
-
-      # Beside the studio, as the two sit on a desk, so ../slot means the same thing here.
       - uses: actions/checkout@v7
         with:
           repository: BrandonKowalski/slot
           ref: ${{ steps.pin.outputs.ref }}
           path: slot
-
-      # The channel rust-toolchain.toml pins, with the target it names.
-      - name: Rust with the wasm32 target
+      - name: Install Rust and WebAssembly target
         run: rustup toolchain install 1.96 --profile minimal --target wasm32-unknown-unknown
-
-      - name: wasm-pack 0.15.0
+      - name: Check JavaScript and card handling
+        working-directory: slot-cart-studio
+        run: |
+          for file in web/*.js; do node --input-type=module --check < "$file"; done
+          node --test web/*.test.mjs
+      - name: Test label generation and cartridge previews
+        working-directory: slot-cart-studio
+        run: cargo test --locked
+      - name: Install wasm-pack
         run: |
           set -eu
-          curl -fsSL https://github.com/wasm-bindgen/wasm-pack/releases/download/v0.15.0/wasm-pack-v0.15.0-x86_64-unknown-linux-musl.tar.gz \
-            | tar -xz -C "$RUNNER_TEMP"
+          curl -fsSL https://github.com/wasm-bindgen/wasm-pack/releases/download/v0.15.0/wasm-pack-v0.15.0-x86_64-unknown-linux-musl.tar.gz | tar -xz -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/wasm-pack-v0.15.0-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
-
-      - name: Build
-        working-directory: slot-cart-studio
-        run: wasm-pack build --release --target web --no-typescript --out-dir web/pkg
-
-      - name: Stamp the commit into the footer
+      - name: Build browser app
         working-directory: slot-cart-studio
         run: |
           set -eu
+          wasm-pack build --release --target web --no-typescript --out-dir web/pkg
           sed -i "s/^const BUILD = 'dev';\$/const BUILD = '$GITHUB_SHA';/" web/studio.js
-          grep -q "^const BUILD = '$GITHUB_SHA';\$" web/studio.js
-
-      - uses: actions/configure-pages@v5
-
-      - uses: actions/upload-pages-artifact@v3
+          cp LICENSE web/LICENSE
+      - uses: actions/upload-artifact@v7
         with:
+          name: cart-studio-web
           path: slot-cart-studio/web
-
-      - id: deploy
-        uses: actions/deploy-pages@v4
-
-      - name: Purge Cloudflare's cache for the studio
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-        run: |
-          set -eu
-          curl -fsS -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            --data "{\"hosts\":[\"$(cat slot-cart-studio/CNAME)\"]}" \
-            | jq -e '.success'
+          if-no-files-found: error

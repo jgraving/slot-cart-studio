@@ -1096,7 +1096,9 @@ async function start() {
   }
   const direct = 'showDirectoryPicker' in window;
   $('pick').hidden = !direct;
-  $('pick-files-label').hidden = direct;
+  $('pick-files-label').hidden = false;
+  $('pick-files-label').classList.toggle('ghost', direct);
+  $('pick-files-text').textContent = direct ? 'Open folder for ZIP export' : 'Choose SD Card';
 
   $('pick').addEventListener('click', async () => {
     let root;
@@ -1172,6 +1174,7 @@ async function start() {
       fill: () => session?.fill ?? null,
     };
   }
+  $('startup').hidden = true;
   document.body.dataset.ready = 'true';
 }
 
@@ -1179,8 +1182,12 @@ $('build').append(
   BUILD === 'dev'
     ? 'dev'
     : Object.assign(document.createElement('a'), {
-        href: `https://github.com/BrandonKowalski/slot-cart-studio/commit/${BUILD}`,
+        href: `https://github.com/jgraving/slot-cart-studio/commit/${BUILD}`,
         textContent: BUILD.slice(0, 7),
       }),
 );
-start();
+start().catch((error) => {
+  $('startup').hidden = true;
+  logError('startup', error);
+  banner('Cart Studio could not start. Reload the page to try again.');
+});

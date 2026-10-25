@@ -1,0 +1,22 @@
+@font-face{font-family:"Google Sans Flex";src:url(https://jakegraving.com/slot.sp/assets/fonts/google-sans-flex.woff2) format("woff2");font-weight:1 1000;font-stretch:25% 151%;font-display:swap}
+:root{--page:#11151c;--housing:#1b212b;--recess:#10141b;--opening:#080b10;--ink:#f4f5f9;--muted:#b1bacb;--rule:#303848;--edge:#667185;--shell-light:#b9eeee;--shell-base:#85dfdd;--shell-accent:#85dfdd;--shell-ink:#112126;--teal:#85dfdd;--purple:#c2adfa}
+body{font-family:"Google Sans Flex",sans-serif;font-optical-sizing:auto;font-variation-settings:"ROND" 20;background:radial-gradient(ellipse 70% 600px at 90% 0%,#43316142,transparent 80%),radial-gradient(ellipse 65% 600px at 0% 0%,#28647538,transparent 80%),var(--page)}
+.mast{background:#11151ce0;border-color:#85dfdd20}
+.mast-mark{font-variation-settings:"ROND" 55;letter-spacing:-.06em}
+.mast-mark::after{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--teal);margin-left:7px;vertical-align:middle;box-shadow:0 0 14px #85dfdd66}
+.mast-links a{font-size:15px}.mast-links a[aria-current="page"]{background:#26313e;color:var(--teal)}
+.wrap{padding-top:56px;min-height:calc(100vh - 60px)}
+.studio-tag{font-size:12px;letter-spacing:.16em;color:var(--teal);font-weight:600;margin:0 0 18px}
+.title{font-weight:680;font-variation-settings:"ROND" 60,"wdth" 98}
+.studio-intro{color:var(--muted);font-size:19px;line-height:1.65;margin:22px auto;max-width:620px}
+.studio-note{color:var(--muted);font-size:13px;margin:18px auto 0;max-width:560px}
+#startup{font-size:14px;color:var(--teal);margin-top:24px}
+.btn{border-radius:12px;background:var(--teal);border-color:var(--teal);color:#112126;font-weight:650}
+.btn.ghost{background:#20293888;border-color:#596477;color:var(--ink)}
+.btn:hover{background:#b9eeee;color:#112126}.btn.ghost:hover{background:#30384a;color:var(--ink)}
+.intro .actions{margin-top:28px}
+.credits a{color:var(--teal)}
+.credits{margin-top:48px;font-size:13px}
+.editor{background:#171d26}
+button:focus-visible,label.btn:focus-within,a:focus-visible{outline-color:var(--teal)}
+@media(max-width:520px){.wrap{padding:36px 20px}.studio-intro{font-size:17px}.intro .actions{flex-direction:column}.intro .btn{width:100%}.studio-note{font-size:12px}}

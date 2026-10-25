@@ -3,37 +3,38 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cart Studio · slot</title>
-<meta name="description" content="Cart labels for a slot SD card, made from libretro's logos and checked on the cart before they are written.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap">
+<title>Cart Studio · slot.sp</title>
+<meta name="description" content="Find game artwork, design labels and choose cartridge colors for slot.sp.">
 <link rel="stylesheet" href="studio.css">
+<link rel="stylesheet" href="slot-sp.css">
+<link rel="icon" href="https://jakegraving.com/slot.sp/favicon.svg">
 <script type="module" src="studio.js"></script>
 </head>
 <body>
 <header class="mast">
-  <a class="mast-mark" href="https://slot-cfw.fyi/">slot.</a>
+  <a class="mast-mark" href="https://jakegraving.com/slot.sp/">slot.sp</a>
   <button class="menu-btn" type="button" id="menu-btn" aria-expanded="false" aria-controls="mast-links" aria-label="Sections">
     <span class="menu-bars" aria-hidden="true"></span>
   </button>
   <nav class="mast-links" id="mast-links" aria-label="slot">
-    <a href="https://slot-cfw.fyi/#install">Installing</a>
-    <a href="https://slot-cfw.fyi/#guide">Guide</a>
-    <a href="https://slot-cfw.fyi/#buttons">Buttons</a>
-    <a href="https://slot-cfw.fyi/#questions">Questions</a>
-    <a href="https://slot-cfw.fyi/#credits">Credits</a>
-    <a href="https://slot-cfw.fyi/#disclosure">AI</a>
-    <a href="./" aria-current="page">Studio</a>
+    <a href="https://jakegraving.com/slot.sp/installing/">Get started</a>
+    <a href="https://jakegraving.com/slot.sp/features/display/">Features</a>
+    <a href="https://jakegraving.com/slot.sp/features/guide/">Guide</a>
+    <a href="https://jakegraving.com/slot.sp/features/cart-studio/">Studio guide</a>
+    <a href="./" aria-current="page">Cart Studio</a>
   </nav>
 </header>
 <main class="wrap">
   <header class="intro">
+    <p class="studio-tag">ARTWORK FOR YOUR GAMES</p>
     <h1 class="title">Cart Studio</h1>
+    <p class="studio-intro">Find artwork, design labels and choose cartridge colors.<br>Save straight to your SD card or download a ZIP.</p>
     <div class="actions">
       <button class="btn" id="pick" type="button" hidden>Choose SD Card</button>
-      <label class="btn" id="pick-files-label" hidden>Choose SD Card<input id="pick-files" class="visually-hidden" type="file" webkitdirectory></label>
+      <label class="btn" id="pick-files-label" hidden><span id="pick-files-text">Choose SD Card</span><input id="pick-files" class="visually-hidden" type="file" webkitdirectory></label>
     </div>
+    <p class="studio-note">Choose the card’s top folder, with Games and Labels inside. Game files stay on your computer.</p>
+    <p id="startup" role="status">Loading Cart Studio…</p>
   </header>
 
   <p class="banner" id="banner" role="alert" hidden></p>
@@ -60,6 +61,7 @@
   <section class="grid" id="grid" aria-label="Carts"></section>
 
   <footer class="credits">
+    <p>Cart Studio for slot.sp by Jake Graving, based on <a href="https://github.com/BrandonKowalski/slot-cart-studio">Cart Studio by Brandon T. Kowalski</a>. <a href="https://github.com/jgraving/slot-cart-studio">Source code</a> · <a href="LICENSE">GPL-3.0-or-later</a></p>
     <p>Game names and CRCs from <a href="https://github.com/libretro/libretro-database">libretro-database</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>).</p>
     <p>Game logos from <a href="https://www.screenscraper.fr/">ScreenScraper</a> (<a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a>).</p>
     <p>Game Boy is a trademark of Nintendo. Not affiliated with Nintendo.</p>
