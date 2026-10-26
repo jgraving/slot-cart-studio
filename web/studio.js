@@ -144,9 +144,9 @@ const baseDeep = (c) => lookOf(c)?.ground ?? Array.from(stopsOf(c)).slice(0, 3);
 const hex = (rgb) => `#${[...rgb].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 // A checksum as the set names its files: eight upper case hex digits.
 const crcHex = (crc) => crc.toString(16).toUpperCase().padStart(8, '0');
-// Our own set, published beside the studio. `?art=` points at another, a local one while it is
-// being harvested, and an empty `?art=` leaves every cart to libretro.
-const ART_BASE = new URLSearchParams(location.search).get('art') ?? 'https://art.slot-cfw.fyi/';
+// Optional scanned-label collection. Its host must allow this site's origin through CORS.
+// The default uses libretro logos; custom label PNGs are always available.
+const ART_BASE = new URLSearchParams(location.search).get('art') ?? '';
 let artIndex = null;
 const fromHex = (value) => [1, 3, 5].map((at) => parseInt(value.slice(at, at + 2), 16));
 // A sure look from the art set, or null: anything missing, unsure or malformed counts as no look.
@@ -1096,7 +1096,9 @@ async function start() {
   }
   const direct = 'showDirectoryPicker' in window;
   $('pick').hidden = !direct;
-  $('pick-files-label').hidden = direct;
+  $('pick-files-label').hidden = false;
+  $('pick-files-label').classList.toggle('ghost', direct);
+  $('pick-files-text').textContent = direct ? 'Open folder for ZIP export' : 'Choose SD Card';
 
   $('pick').addEventListener('click', async () => {
     let root;
@@ -1172,6 +1174,7 @@ async function start() {
       fill: () => session?.fill ?? null,
     };
   }
+  $('startup').hidden = true;
   document.body.dataset.ready = 'true';
 }
 
@@ -1179,8 +1182,12 @@ $('build').append(
   BUILD === 'dev'
     ? 'dev'
     : Object.assign(document.createElement('a'), {
-        href: `https://github.com/BrandonKowalski/slot-cart-studio/commit/${BUILD}`,
+        href: `https://github.com/jgraving/slot-cart-studio/commit/${BUILD}`,
         textContent: BUILD.slice(0, 7),
       }),
 );
-start();
+start().catch((error) => {
+  $('startup').hidden = true;
+  logError('startup', error);
+  banner('Cart Studio could not start. Reload the page to try again.');
+});
