@@ -141,1100 +141,679 @@ fn premultiplied(logo: &[u8], w: u32, (x0, y0, x1, y1): (u32, u32, u32, u32)) ->
             let a = logo[i + 3] as u32;
             for c in 0..3 {
                 out.push(((logo[i + c] as u32 * a + 127) / 255) as u8);
-    …18077 tokens truncated…   error: null,
-    result: null,
-    looking: true,
-    el: null,
-  };
-}
-
-const realPathOf = (c) => {
-  const key = c.rejected ? null : artKey(c);
-  return (key && artIndex?.[key]?.['support-texture']) || null;
-};
-
-const realOf = (c) => (c.real && c.real.path === realPathOf(c) ? c.real : null);
-const realBytesOf = (c) => realOf(c)?.bytes ?? null;
-
-const view = (c) => ({
-  choice: c.choice,
-  byHand: c.byHand,
-  onCard: !!c.existingPng,
-  hasReal: !realOf(c)?.failed && !!realPathOf(c),
-  hasLogo: !c.rejected && !!c.logoBytes,
-  customLogoBytes: c.customLogoBytes,
-  customLabelBytes: c.customLabelBytes,
-  error: c.error,
-});
-
-const wearing = (c) => wears(view(c));
-
-function stateOf(c) {
-  if (c.error) return 'error';
-  const { kind, why } = wearing(c);
-  if (kind === 'card') return 'has-label';
-  if (c.looking || (kind === 'real' && !realBytesOf(c))) return 'looking';
-  if (kind === 'none') return why === 'unfilled' ? 'unfilled' : 'needs-logo';
-  return 'ready';
-}
-
-// The box art belongs to the matched game, so its hue only stands while the match does.
-const baseHueOf = (c) =>
-  c.game && !c.rejected && c.boxHue !== null ? c.boxHue : fallback_hue(c.stem);
-
-// A label is described by its deep corner, whether computed or picked, and the corner a hue
-// produces depends on the logo going over it: dark logos get a pale ground, bright ones a deep
-// one. stop_colours is that rule, so the page never restates the house numbers itself.
-const stopsOf = (c) => stop_colours(baseHueOf(c), lumaOf(c, wearing(c).kind));
-const baseDeep = (c) => lookOf(c)?.ground ?? Array.from(stopsOf(c)).slice(0, 3);
-
-const hex = (rgb) => `#${[...rgb].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
-// A checksum as the set names its files: eight upper case hex digits.
-const crcHex = (crc) => crc.toString(16).toUpperCase().padStart(8, '0');
-// Optional scanned-label collection. Its host must allow this site's origin through CORS.
-// The default uses libretro logos; custom label PNGs are always available.
-const ART_BASE = new URLSearchParams(location.search).get('art') ?? '';
-let artIndex = null;
-const fromHex = (value) => [1, 3, 5].map((at) => parseInt(value.slice(at, at + 2), 16));
-// A sure look from the art set, or null: anything missing, unsure or malformed counts as no look.
-const rgbOf = (h) => (typeof h === 'string' && /^[0-9a-f]{6}$/i.test(h) ? fromHex(`#${h}`) : null);
-function parseLook(raw) {
-  if (!raw || raw.sure !== true) return null;
-  const ground = rgbOf(raw.ground);
-  if (!ground) return null;
-  if (!raw.band) return { ground, band: null };
-  const { edge, size } = raw.band;
-  const colour = rgbOf(raw.band.colour);
-  const ok = ['top', 'bottom', 'left', 'right'].includes(edge) && typeof size === 'number' && size > 0 && size < 0.5;
-  return ok && colour ? { ground, band: { edge, size, colour } } : null;
-}
-const lumaOf = (c, kind) => (kind === 'customLogo' ? c.customLogoLuma : c.logoLuma);
-const lookOf = (c) => (wearing(c).kind === 'logo' ? c.look : null);
-const bandOf = (c) => lookOf(c)?.band ?? null;
-
-const readyCarts = () =>
-  session ? session.carts.filter((c) => stateOf(c) === 'ready' && c.result !== 'skipped') : [];
-
-const shellChanges = () => (session ? session.carts.filter((c) => c.shell !== c.shellOnCard) : []);
-// Into the Labels layer.
-const mergedShells = (s, carts, values) =>
-  merge_cart_shells(
-    s.shellText ?? '',
-    carts.map((c) => c.stem),
-    values.map((v, i) => v || (s.systemShells?.has(carts[i].stem.normalize('NFC')) ? 'auto' : '')),
-  );
-const SHELL_FILE = 'Labels/cart_shell.txt';
-const pathKey = (path) => path.normalize('NFC').toLowerCase();
-
-// A Label holds its composition in WASM memory, which never shrinks and stops at 4 GiB.
-// One kept per cart runs a big card out of it, so a Label lives only for the call that needs it.
-function withLabel(bytes, deep, platform, use, band = null) {
-  const label = band
-    ? new Label(bytes, deep, platform, band.edge, band.size, new Uint8Array(band.colour))
-    : new Label(bytes, deep, platform, '', 0, new Uint8Array(0));
-  try {
-    return use(label);
-  } finally {
-    label.free();
-  }
-}
-
-function withKindLabel(c, kind, use) {
-  if (kind === 'real' || kind === 'customLabel') {
-    const bytes = kind === 'real' ? realBytesOf(c) : c.customLabelBytes;
-    if (!bytes) return null;
-    const label = Label.full(bytes, c.platform);
-    try {
-      return use(label);
-    } finally {
-      label.free();
-    }
-  }
-  const bytes = kind === 'logo' ? c.logoBytes : kind === 'customLogo' ? c.customLogoBytes : null;
-  if (!bytes) return null;
-  const look = kind === 'logo' ? c.look : null;
-  const deep = c.deep ?? look?.ground ?? Array.from(stop_colours(baseHueOf(c), lumaOf(c, kind))).slice(0, 3);
-  return withLabel(bytes, deep, c.platform, use, look?.band ?? null);
-}
-
-const withCartLabel = (c, use) => withKindLabel(c, wearing(c).kind, use);
-
-const BLANK = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAD0lEQVR4nGO0snJiYGAAAAOUALgNWObMAAAAAElFTkSuQmCC'), (ch) => ch.charCodeAt(0));
-
-function faceFor(c, kind) {
-  if (kind === 'card') return c.existing;
-  if (kind === 'none') return existing_face(new Uint8Array(0), c.platform, c.code, c.head, c.shell, c.stem);
-  if (kind === 'unfilled') {
-    const label = Label.full(BLANK, c.platform);
-    try {
-      return label.face(c.platform, c.code, c.head, c.shell, c.stem);
-    } finally {
-      label.free();
-    }
-  }
-  return withKindLabel(c, kind, (label) => label.face(c.platform, c.code, c.head, c.shell, c.stem));
-}
-
-// Whether slot's decoder takes a logo, asked the only way the module can be asked: by making one.
-function readable(bytes) {
-  try {
-    // Any platform will do: the question is only whether slot's decoder takes these bytes.
-    withLabel(bytes, [0, 0, 0], 'GBA', () => {});
-    return true;
-  } catch (e) {
-    if (e instanceof WebAssembly.RuntimeError) throw e;
-    return false;
-  }
-}
-
-// A WebAssembly.RuntimeError is a trap: memory ran out, or Rust panicked. The plain Error a Label
-// throws for bytes that aren't a PNG is not one. Returns whether `e` was a trap.
-function trapped(e) {
-  if (!(e instanceof WebAssembly.RuntimeError)) return false;
-  if (!fatal) {
-    fatal = true;
-    loading(null);
-    logError('trap', e);
-    $('progress').hidden = true;
-    banner(FATAL);
-    updateWriteBar();
-  }
-  return true;
-}
-
-// A thumbnail that won't fetch is only a missing image. A trap on the way is not.
-const noImage = (e) => {
-  if (e instanceof WebAssembly.RuntimeError) throw e;
-  return null;
-};
-
-function describe(c, state) {
-  if (state === 'error') return c.error;
-  if (state === 'looking' && !c.looking) return 'Loading the real label…';
-  if (state === 'looking') return c.crc === null ? 'Reading the ROM…' : 'Looking it up…';
-  if (state === 'unfilled') return '';
-  return '';
-}
-
-function buildCard(c) {
-  const root = $('card-tpl').content.firstElementChild.cloneNode(true);
-  const q = (selector) => root.querySelector(selector);
-  c.el = { root, canvas: q('canvas'), face: q('.face'), stem: q('.stem'), print: q('.print'), game: q('.game') };
-  const [boxW, boxH] = boxOf(c.platform);
-  c.el.canvas.width = boxW;
-  c.el.canvas.height = boxH;
-  // The device's own title, with the file it came from on hover.
-  c.el.stem.textContent = clean_label(c.stem);
-  c.el.stem.title = c.stem;
-  // slot keeps `(USA, Europe)` as one tag so it never claims two releases; the small print reads
-  // each region on its own.
-  c.tags = label_tags(c.stem)
-    .flatMap((group) => group.split(','))
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-  root.setAttribute('aria-label', `Edit ${clean_label(c.stem)}`);
-  root.addEventListener('click', () => editor.open(c));
-  root.addEventListener('keydown', (e) => {
-    if (e.target !== root || (e.key !== 'Enter' && e.key !== ' ')) return;
-    e.preventDefault();
-    editor.open(c);
-  });
-  // Always taken, so a file dropped on a cart that can't use it doesn't navigate the page away.
-  c.el.face.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    c.el.face.classList.toggle('over', canLabel(c));
-  });
-  c.el.face.addEventListener('dragleave', () => c.el.face.classList.remove('over'));
-  c.el.face.addEventListener('drop', (e) => {
-    e.preventDefault();
-    c.el.face.classList.remove('over');
-    if (canLabel(c)) track(takeLogo(c, e.dataTransfer.files[0]));
-  });
-  return root;
-}
-
-// A slider fires faster than a label recomposes, so paints are coalesced to one per frame.
-const queued = new Set();
-function schedulePaint(c) {
-  if (queued.has(c)) return;
-  queued.add(c);
-  requestAnimationFrame(() => {
-    queued.delete(c);
-    paint(c);
-  });
-}
-
-// The face a cart shows. A needs-logo cart has none of its own, so slot's generated label stands
-// in, as it does on the device.
-function faceOf(c, state) {
-  if (state === 'has-label') return faceFor(c, 'card');
-  if (state === 'ready') return faceFor(c, wearing(c).kind);
-  if (state === 'needs-logo') return faceFor(c, 'none');
-  if (state === 'unfilled') return faceFor(c, 'unfilled');
-  return null;
-}
-
-function drawFace(canvas, face, platform) {
-  const pixels = new Uint8ClampedArray(face.buffer, face.byteOffset, face.byteLength);
-  const [boxW, boxH] = boxOf(platform);
-  canvas.getContext('2d').putImageData(new ImageData(pixels, boxW, boxH), 0, 0);
-}
-
-function paint(c) {
-  if (fatal) return;
-  if (session && needsReal(c)) track(fetchReal(session, c));
-  const state = stateOf(c);
-  const { root, canvas, game } = c.el;
-  root.dataset.state = state;
-  let face;
-  try {
-    face = faceOf(c, state);
-  } catch (e) {
-    if (trapped(e)) return;
-    throw e;
-  }
-  canvas.hidden = !face;
-  if (face) drawFace(canvas, face, c.platform);
-  game.textContent = describe(c, state);
-  // The game code is read with the ROM, after the card is built.
-  c.el.print.textContent = smallPrint(c.platform, c.code, c.tags);
-  updateWriteBar();
-  updateFillButton();
-  if (editor.current() === c) editor.refresh();
-}
-
-// A game named by hand is dressed exactly as a matched one, so its logo, box art hue and the
-// clash rule all apply. The CRC keeps whatever it said; the name is what the label follows.
-function chooseGame(c, name) {
-  if (c.game === name && !c.rejected) return;
-  c.game = name;
-  c.rejected = false;
-  c.logoBytes = null;
-  c.looking = true;
-  track(redress(session, c));
-}
-
-async function redress(s, c) {
-  paint(c);
-  try {
-    await dress(s, c);
-  } catch (e) {
-    if (!trapped(e)) throw e;
-  }
-  if (s !== session) return;
-  c.looking = false;
-  paint(c);
-}
-
-const choiceOf = (c) => {
-  const [outline, colour, finish] = (c.shell || auto_shell(c.platform, c.code, c.head)).split(' ');
-  return { outline, colour, finish };
-};
-
-async function readLogo(file) {
-  if (!file) return null;
-  let bytes = null;
-  try {
-    bytes = new Uint8Array(await file.arrayBuffer());
-    if (fatal) return null;
-    if (!readable(bytes)) bytes = null;
-  } catch (e) {
-    if (trapped(e)) return null;
-    bytes = null;
-  }
-  if (!bytes) banner(`${file.name} is not a PNG this studio can read`);
-  return bytes;
-}
-
-// A logo of the person's own decides which way its ground goes the same way a fetched one does.
-function useCustomLogo(c, bytes) {
-  c.customLogoBytes = bytes;
-  c.customLogoLuma = logo_luma(bytes);
-  c.choice = 'customLogo';
-  c.byHand = true;
-  if (!c.userHue) c.deep = null;
-}
-
-function useCustomLabel(c, bytes) {
-  c.customLabelBytes = bytes;
-  c.choice = 'customLabel';
-  c.byHand = true;
-}
-
-function choose(c, kind) {
-  c.choice = kind;
-  c.byHand = kind !== 'card';
-  if (!c.userHue) c.deep = null;
-  if (kind !== 'card' && !c.dressed) ensureTiles(c);
-  else if (needsReal(c)) track(fetchReal(session, c));
-}
-
-function ensureTiles(c) {
-  if (c.error) return;
-  if (!c.dressed && !c.looking) {
-    c.looking = true;
-    track(lookUp(session, c).then(() => c.dressed && ensureTiles(c)));
-    return;
-  }
-  if (c.dressed && realPathOf(c) && !realOf(c)) track(fetchReal(session, c));
-}
-
-function fetchReal(s, c) {
-  const path = realPathOf(c);
-  if (!path) return Promise.resolve();
-  if (realOf(c)) return realOf(c).pending;
-  const real = { path, bytes: null, failed: false, pending: null };
-  c.real = real;
-  real.pending = (async () => {
-    let bytes = null;
-    try {
-      bytes = await limit(async () => (s === session && !fatal ? fetchArt(ART_BASE, path) : null));
-      if (bytes && !readable(bytes)) bytes = null;
-    } catch (e) {
-      if (trapped(e)) return;
-      bytes = null;
-    }
-    if (s !== session || fatal) return;
-    if (bytes) real.bytes = bytes;
-    else real.failed = true;
-    paint(c);
-  })();
-  return real.pending;
-}
-
-function retryReal(c) {
-  if (realOf(c)?.failed) c.real = null;
-}
-
-const needsReal = (c) => wearing(c).kind === 'real' && !realOf(c);
-
-async function takeLogo(c, file) {
-  const bytes = await readLogo(file);
-  if (bytes && commit(c, () => useCustomLogo(c, bytes))) changed(c);
-}
-
-function loading(text) {
-  document.body.classList.toggle('loading', !!text);
-  $('loader').hidden = !text;
-  if (text) $('loader-text').textContent = text;
-}
-
-function progress(done, total, stem, verb = 'Reading') {
-  if (document.body.classList.contains('loading') && stem) loading(`${verb} ${done + 1} of ${total}: ${stem}`);
-  $('progress').hidden = done >= total;
-  $('bar').max = total;
-  $('bar').value = done;
-  $('progress-text').textContent = stem ? `${verb} ${done + 1} of ${total}: ${stem}` : '';
-}
-
-function banner(text, retry) {
-  const b = $('banner');
-  b.replaceChildren(Object.assign(document.createElement('span'), { className: 'message', textContent: text }));
-  const key = (label, click, extra = '') => {
-    const button = Object.assign(document.createElement('button'), {
-      type: 'button',
-      className: `key dark ${extra}`.trim(),
-      textContent: label,
-    });
-    button.addEventListener('click', () => click(button));
-    b.append(' ', button);
-  };
-  if (retry) key('Retry', retry);
-  if (hasLog()) {
-    key('Copy log', async (button) => {
-      try {
-        await navigator.clipboard.writeText(logText(navigator.userAgent));
-        button.textContent = 'Copied';
-      } catch (e) {
-        console.error('clipboard', e);
-        button.textContent = 'Couldn’t copy';
-      }
-    }, 'copy-log');
-  }
-  b.hidden = false;
-}
-
-async function open(source) {
-  if (fatal) {
-    banner(FATAL);
-    return;
-  }
-  editor.close();
-  loading(null);
-  session = { source, carts: source.carts.map(newCart) };
-  $('banner').hidden = true;
-  $('eject').hidden = true;
-  // A card opened mid-scan replaces identify()'s loop before it reaches progress(total, total, ''),
-  // so the old bar has to be cleared here rather than left for a call that may never come.
-  $('progress').hidden = true;
-  $('progress-text').textContent = '';
-  $('grid').replaceChildren(...session.carts.map(buildCard));
-  session.carts.forEach(paint);
-  showPlatform(platformsOf(session)[0] ?? PLATFORMS[0]);
-  // The card is chosen, so the chooser goes: the write bar sits in its place, once there is
-  // something to write. updateWriteBar, reached through paint, is what shows it.
-  $('pick').hidden = true;
-  $('pick-files-label').hidden = true;
-  $('write-bar').hidden = true;
-  $('fill-open').hidden = true;
-  if (session.carts.length === 0) {
-    banner('There are no .gba files in that card’s Games folder.');
-    return;
-  }
-  loading('Reading the card…');
-  track(identify(session));
-}
-
-async function crcOf(file) {
-  const crc = new Crc32();
-  const reader = file.stream().getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) return crc.finish();
-    crc.update(value);
-  }
-}
-
-async function identify(s) {
-  const text = { system: '', labels: '' };
-  const failed = [];
-  try {
-    text.system = await s.source.systemShells();
-  } catch (e) {
-    logError('Config/cart_shell.txt', e);
-    failed.push(e);
-  }
-  try {
-    text.labels = await s.source.labelShells();
-  } catch (e) {
-    logError(SHELL_FILE, e);
-    s.shellReadFailed = true;
-    failed.push(e);
-  }
-  if (s !== session || fatal) return;
-  if (failed.length) banner(failed.find((e) => e.name === 'OldShellFile')?.message ?? 'The card’s shells couldn’t be read.');
-  s.shellText = text.labels;
-  const system = cart_shells(text.system);
-  s.systemShells = new Set(system.filter((_, i) => i % 2 === 0).map((stem) => stem.normalize('NFC')));
-  const pairs = layered_cart_shells(text.system, text.labels);
-  const chosen = new Map();
-  for (let i = 0; i < pairs.length; i += 2) chosen.set(pairs[i].normalize('NFC'), pairs[i + 1]);
-  for (const c of s.carts) c.shell = c.shellOnCard = chosen.get(c.stem.normalize('NFC')) ?? '';
-
-  const total = s.carts.length;
-  for (const [i, c] of s.carts.entries()) {
-    if (s !== session || fatal) return;
-    progress(i, total, c.stem);
-    try {
-      const file = await c.file();
-      const head = new Uint8Array(await file.slice(0, HEAD).arrayBuffer());
-      // Only a GBA rom carries a game code. On a Game Boy cart 0xAC is inside the RST vectors,
-      // so a code read from there is opcode bytes dressed up as one.
-      c.code = c.platform === 'GBA' ? header_code(head) : '';
-      if (c.platform !== 'GBA') c.head = head;
-      const label = s.source.labels.get(labelKey(c.platform, c.stem));
-      if (label) {
-        const bytes = new Uint8Array(await (await label()).arrayBuffer());
-        c.existingPng = bytes;
-        c.choice = 'card';
-        c.existing = existing_face(bytes, c.platform, c.code, c.head, c.shell, c.stem);
-        c.looking = false;
-      } else {
-        c.crc = await crcOf(file);
-      }
-    } catch (e) {
-      if (trapped(e)) return;
-      c.error = `Could not read this ROM: ${e.message}`;
-    }
-    paint(c);
-  }
-  // A card opened during the last read has its own bar up by now.
-  if (s !== session) return;
-  progress(total, total, '');
-  loading('Looking up the games…');
-  await match(s);
-  if (s === session) loading(null);
-}
-
-async function match(s) {
-  // One database per platform, fetched only for the platforms this card actually holds: a card
-  // of nothing but GBA carts never pays for the two Game Boy databases.
-  for (const platform of new Set(s.carts.map((c) => c.platform))) {
-    if (dats.has(platform)) continue;
-    try {
-      dats.set(platform, Dat.parse(await fetchDat(platform)));
-    } catch (e) {
-      if (trapped(e) || s !== session || fatal) return;
-      s.datFailed = true;
-      banner(
-        `The ${platform} database didn’t load (${e.message}), so carts can’t be matched yet. Logos can still be dropped in by hand.`,
-        () => track(match(s)),
-      );
-      for (const c of s.carts) {
-        if (c.looking) {
-          c.looking = false;
-          paint(c);
+            }
+            out.push(a as u8);
         }
-      }
-      return;
     }
-  }
-  if (s !== session || fatal) return;
-  if (s.datFailed) {
-    s.datFailed = false;
-    $('banner').hidden = true;
-  }
-  const pending = s.carts.filter((c) => c.crc !== null && !c.game && !c.existing && !c.error);
-  await Promise.all(pending.map((c) => art(s, c)));
-  if (s === session && !fatal && s.fill == null) await fillOrAsk(s);
+    out
 }
 
-async function art(s, c) {
-  c.looking = true;
-  paint(c);
-  try {
-    c.game = dats.get(c.platform)?.game_for(c.crc) ?? null;
-    await dress(s, c);
-  } catch (e) {
-    if (trapped(e)) return;
-    throw e;
-  }
-  c.looking = false;
-  paint(c);
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Edge {
+    Top,
+    Bottom,
+    Left,
+    Right,
 }
 
-// Where the set files this cart's art: under its own checksum while its game is the one that
-// checksum names, else under the first dump of the game chosen for it that the set has.
-function artKey(c) {
-  const own = c.crc === null ? null : crcHex(c.crc);
-  const db = dats.get(c.platform);
-  if (!c.game || !db || (c.crc !== null && db.game_for(c.crc) === c.game)) return own;
-  return Array.from(db.crcs_for(c.game), crcHex).find((k) => artIndex?.[k]) ?? null;
+/// A flat strip of colour along one edge of the label, as the real label has.
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub struct Band {
+    pub edge: Edge,
+    /// Thickness, as a fraction of the label across that edge.
+    pub size: f32,
+    pub colour: [u8; 3],
 }
 
-// Fetch what `c.game` names and let it decide the cart's hue. The Game row re-runs this for a game
-// chosen by hand, so a chosen match is dressed exactly the way a matched one is.
-async function dress(s, c) {
-  // A set of our own is found by checksum, so a cart no database has a name for can still be
-  // dressed from it. libretro is found by name, so those requests only happen when there is one.
-  const name = c.game ? thumbnail_name(c.game) : null;
-  const key = artKey(c);
-  c.look = parseLook(key && artIndex?.[key]?.look);
-  // The queue is shared, so a card replaced while its jobs wait gives up their turns without
-  // a request instead of making the new card wait behind its downloads.
-  const thumb = (folder) =>
-    !name
-      ? Promise.resolve(null)
-      : limit(async () =>
-          s === session && !fatal ? fetchThumb(c.platform, folder, name, stub_target) : null,
-        ).catch(noImage);
-  // Prefer the checksum catalog, then use libretro logos where the system provides them.
-  const ours = (media) => {
-    const path = key && artIndex?.[key]?.[media];
-    if (!path) return Promise.resolve(null);
-    return limit(async () =>
-      s === session && !fatal ? fetchArt(ART_BASE, path) : null,
-    ).catch(noImage);
-  };
-  // The ground's colour is read off the box art, so that request starts now and is waited on
-  // after the logo.
-  const boxJob = thumb('Named_Boxarts');
-  if (!c.logoBytes) {
-    const logo = (await ours('wheel')) ?? (await thumb('Named_Logos'));
-    if (s !== session || fatal) return;
-    c.logoBytes = logo && readable(logo) ? logo : null;
-    // How bright the logo is decides which way its ground goes, so it is measured with the logo.
-    c.logoLuma = c.logoBytes ? logo_luma(c.logoBytes) : 255;
-  }
-  const box = await boxJob;
-  if (s !== session || fatal) return;
-  c.boxHue = box ? (box_hue(box) ?? null) : null;
-  if (!c.userHue) c.deep = null;
-  c.dressed = true;
-  if (needsReal(c)) await fetchReal(s, c);
-  if (editor.current() === c) ensureTiles(c);
-}
-
-// The platforms this card actually holds, in the studio's shelf order.
-const platformsOf = (s) => PLATFORMS.filter((p) => s.carts.some((c) => c.platform === p));
-
-// A tab per platform on the card, with what it holds. One platform is no choice at all, so a
-// card of nothing but GBA carts shows no switcher and reads exactly as it did before.
-const PLATFORM_NAMES = { GBA: 'Game Boy Advance', GB: 'Game Boy', GBC: 'Game Boy Color' };
-
-function renderTabs() {
-  const s = session;
-  const present = platformsOf(s);
-  $('tabs').hidden = present.length < 2;
-  $('tabs').replaceChildren(
-    ...present.map((p) => {
-      const n = s.carts.filter((c) => c.platform === p).length;
-      const tab = Object.assign(document.createElement('button'), { type: 'button', className: 'shelf-tab' });
-      tab.append(PLATFORM_NAMES[p] ?? p, Object.assign(document.createElement('span'), { className: 'n', textContent: n }));
-      tab.setAttribute('aria-pressed', String(p === s.platform));
-      tab.addEventListener('click', () => showPlatform(p));
-      return tab;
-    }),
-  );
-}
-
-// Switching hides the other shelves rather than rebuilding the grid: a cart keeps its canvas, its
-// chosen colour and any logo dropped on it, so coming back to a tab finds it as it was left.
-function showPlatform(p) {
-  editor.close();
-  session.platform = p;
-  for (const c of session.carts) c.el.root.hidden = c.platform !== p;
-  renderTabs();
-}
-
-function updateWriteBar() {
-  if (!session) return;
-  const n = readyCarts().length + shellChanges().length;
-  $('write-bar').hidden = n === 0 && !writing && $('eject').hidden;
-  // Nothing to write means no button at all.
-  $('write').hidden = n === 0 && !writing;
-  $('write').disabled = n === 0 || writing || fatal;
-  $('write').textContent = session.source.direct ? 'Write to card' : 'Download ZIP';
-}
-
-function writeProgress(done, total) {
-  $('write').classList.toggle('busy', total > 0);
-  $('write').style.setProperty('--done', total > 0 ? String(done / total) : '0');
-}
-
-function updateFillButton() {
-  if (!session) return;
-  const counts = fillCounts(session.carts.map(view));
-  $('fill-open').hidden = counts.unlabelled === 0 || (session.fill != null && autoFill(counts) !== null);
-}
-
-async function fillOrAsk(s) {
-  const counts = fillCounts(s.carts.map(view));
-  if (counts.unlabelled === 0 || s !== session || fatal) return;
-  const auto = autoFill(counts);
-  if (auto) answerFill(auto);
-  else await askFill(s);
-}
-
-async function askFill(s) {
-  const counts = fillCounts(s.carts.map(view));
-  if (counts.unlabelled === 0 || s !== session || fatal) return;
-  const { title, question } = fillText(counts);
-  $('fill-title').textContent = title;
-  $('fill-question').textContent = question;
-  const sample =
-    s.carts.find((c) => !c.existingPng && view(c).hasReal && view(c).hasLogo) ??
-    s.carts.find((c) => !c.existingPng && (view(c).hasReal || view(c).hasLogo));
-  if (sample) await fetchReal(s, sample);
-  if (s !== session || fatal) return;
-  for (const kind of ['real', 'logo']) {
-    const canvas = $(`fill-${kind}`).querySelector('canvas');
-    let face = null;
-    try {
-      face = sample ? faceFor(sample, kind) : null;
-    } catch (e) {
-      if (trapped(e)) return;
-      throw e;
+impl Band {
+    pub fn parse(edge: &str, size: f32, colour: &[u8]) -> Option<Band> {
+        let edge = match edge {
+            "top" => Edge::Top,
+            "bottom" => Edge::Bottom,
+            "left" => Edge::Left,
+            "right" => Edge::Right,
+            _ => return None,
+        };
+        (size > 0.0 && size < 0.5 && colour.len() >= 3).then(|| Band {
+            edge,
+            size,
+            colour: [colour[0], colour[1], colour[2]],
+        })
     }
-    canvas.hidden = !face;
-    if (face) {
-      [canvas.width, canvas.height] = boxOf(sample.platform);
-      drawFace(canvas, face, sample.platform);
+
+    /// The strip, as x0, y0, x1, y1 on a label `lw` by `lh`: from the label's edge to its
+    /// thickness inside the part slot shows, so a thin band is not lost to the crop.
+    fn strip(&self, lw: u32, lh: u32) -> (u32, u32, u32, u32) {
+        let (x0, y0, x1, y1) = shown(lw, lh);
+        let (tw, th) = (self.across(x1 - x0), self.across(y1 - y0));
+        match self.edge {
+            Edge::Top => (0, 0, lw, y0 + th),
+            Edge::Bottom => (0, y1 - th, lw, lh),
+            Edge::Left => (0, 0, x0 + tw, lh),
+            Edge::Right => (x1 - tw, 0, lw, lh),
+        }
     }
-  }
-  if (!$('fill').open) {
-    $('fill').showModal();
-    $('fill').focus();
-  }
+
+    /// What slot shows of the label beside the strip, as x, y, width, height, which the logo is
+    /// placed within.
+    fn rest(&self, lw: u32, lh: u32) -> (u32, u32, u32, u32) {
+        let (x0, y0, x1, y1) = shown(lw, lh);
+        let (tw, th) = (self.across(x1 - x0), self.across(y1 - y0));
+        match self.edge {
+            Edge::Top => (x0, y0 + th, x1 - x0, y1 - y0 - th),
+            Edge::Bottom => (x0, y0, x1 - x0, y1 - y0 - th),
+            Edge::Left => (x0 + tw, y0, x1 - x0 - tw, y1 - y0),
+            Edge::Right => (x0, y0, x1 - x0 - tw, y1 - y0),
+        }
+    }
+
+    fn across(&self, n: u32) -> u32 {
+        ((n as f32 * self.size).round() as u32).min(n)
+    }
 }
 
-function answerFill(fill) {
-  const s = session;
-  if (!s) return;
-  s.fill = fill;
-  for (const c of s.carts) {
-    const v = view(c);
-    if (!applyFill([v], fill)) continue;
-    c.choice = v.choice;
-    amend(c, (snap) => {
-      if (snap.choice == null) snap.choice = fill;
-    });
-  }
-  $('fill').close();
-  for (const c of s.carts) {
-    if (!c.userHue) c.deep = null;
-    paint(c);
-    if (needsReal(c)) track(fetchReal(s, c));
-  }
-  updateFillButton();
-}
-
-function download(blob, name) {
-  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
-}
-
-async function writeLabels() {
-  const s = session;
-  const carts = readyCarts();
-  const shells = shellChanges();
-  if ((!carts.length && !shells.length) || writing || fatal) return;
-  writing = true;
-  $('eject').hidden = true;
-  updateWriteBar();
-  writeProgress(0, carts.length + shells.length);
-  try {
-    if (s.source.direct) {
-      const count = { written: 0, skipped: 0, failed: 0 };
-      for (const c of carts) {
-        if (fatal) return;
-        let face = null;
-        let png = null;
-        try {
-          [png, face] = withCartLabel(c, (label) => [
-            label.png(),
-            label.face(c.platform, c.code, c.head, c.shell, c.stem),
-          ]);
-          c.result = await s.source.write(c.platform, c.stem, png, !!c.existingPng);
-        } catch (e) {
-          if (trapped(e)) return;
-          logError(c.stem, e);
-          c.result = 'failed';
-        }
-        if (c.result === 'written') {
-          c.existing = face;
-          c.existingPng = png;
-          c.choice = 'card';
-          c.byHand = false;
-        }
-        count[c.result]++;
-        writeProgress(count.written + count.skipped + count.failed, carts.length + shells.length);
-        paint(c);
-      }
-      let shellNote = '';
-      if (shells.length) {
-        if (s.shellReadFailed) {
-          shellNote = 'Shells not written: the card’s shells couldn’t be read.';
-        } else {
-          // Captured before the write's await, so a change made during it is not marked written.
-          const values = shells.map((c) => c.shell);
-          try {
-            const text = mergedShells(s, shells, values);
-            await s.source.writeShells(text);
-            s.shellText = text;
-            shells.forEach((c, i) => (c.shellOnCard = values[i]));
-            count.shells = shells.length;
-          } catch (e) {
-            if (trapped(e)) return;
-            logError(SHELL_FILE, e);
-            shellNote = 'Writing the shells failed.';
-          }
-        }
-      }
-      // One that didn't, all of it, says so. Not over a card opened while this one was writing.
-      if (s === session) {
-        $('eject').hidden = !(count.written || count.shells);
-        const plural = (k, one, many) => `${k} ${k === 1 ? one : many}`;
-        const problems = [
-          count.failed && `${plural(count.failed, 'label', 'labels')} couldn’t be written.`,
-          count.skipped && `${plural(count.skipped, 'label was', 'labels were')} skipped: one turned up on the card meanwhile.`,
-          shellNote,
-        ].filter(Boolean);
-        if (problems.length) banner(problems.join(' '));
-      }
+/// The part of a label slot shows, as x0, y0, x1, y1. slot covers its well with the label, so a
+/// label of another shape loses rows or columns.
+fn shown(lw: u32, lh: u32) -> (u32, u32, u32, u32) {
+    let (ww, wh) = if (lw, lh) == (W, H) {
+        (crate::cart::LABEL_W, crate::cart::LABEL_H)
     } else {
-      const zip = new Zip();
-      // Each entry is taken out of WASM memory as soon as it is added, so the card's labels pile
-      // up here, where memory is given back, and not in the module.
-      const parts = [];
-      const written = new Set();
-      const carried = s.source.labelFiles;
-      const total = carts.length + shells.length + carried.length;
-      for (const [i, c] of carts.entries()) {
-        writeProgress(i + 1, total);
-        const path = `Labels/${c.platform}/${c.stem}.png`;
-        zip.add(path, withCartLabel(c, (label) => label.png()));
-        parts.push(zip.take());
-        written.add(pathKey(path));
-        // Packing a few hundred carts is seconds of synchronous work with nothing on screen, so
-        // give the tab a turn to paint the bar and take input.
-        await new Promise((r) => setTimeout(r, 0));
-        // A trap elsewhere, or a card replacing this one, can happen while this awaits.
-        if (fatal || s !== session) return;
-      }
-      let shellNote = '';
-      if (shells.length) {
-        if (s.shellReadFailed) {
-          shellNote = 'Shells not written: the card’s shells couldn’t be read.';
-        } else {
-          try {
-            const text = mergedShells(s, shells, shells.map((c) => c.shell));
-            zip.add(SHELL_FILE, new TextEncoder().encode(text));
-            parts.push(zip.take());
-            written.add(pathKey(SHELL_FILE));
-          } catch (e) {
-            if (trapped(e)) return;
-            logError(SHELL_FILE, e);
-            shellNote = 'Writing the shells failed.';
-          }
-        }
-      }
-      let unread = 0;
-      for (const [i, f] of carried.entries()) {
-        writeProgress(carts.length + shells.length + i + 1, total);
-        if (written.has(pathKey(f.path))) continue;
-        try {
-          zip.add(f.path, new Uint8Array(await (await f.file()).arrayBuffer()));
-          parts.push(zip.take());
-        } catch (e) {
-          if (trapped(e)) return;
-          logError(f.path, e);
-          unread++;
-        }
-        if (fatal || s !== session) return;
-      }
-      parts.push(zip.finish());
-      download(new Blob(parts, { type: 'application/zip' }), 'labels.zip');
-      const unreadNote =
-        unread > 0 &&
-        `${unread === 1 ? '1 file' : `${unread} files`} in the card’s Labels folder couldn’t be read and aren’t in the zip. Merge it into the card’s Labels folder rather than replacing it.`;
-      const notes = [shellNote, unreadNote].filter(Boolean);
-      if (s === session && notes.length) banner(notes.join(' '));
-    }
-  } catch (e) {
-    if (!trapped(e)) throw e;
-  } finally {
-    writing = false;
-    writeProgress(0, 0);
-    updateWriteBar();
-  }
-}
-
-const canLabel = (c) => !c.error && !c.looking;
-
-const SMALL = new Set(['in', 'of', 'the', 'and']);
-const titled = (name) =>
-  name
-    .split(' ')
-    .map((w, i) => (i > 0 && SMALL.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)))
-    .join(' ');
-
-let presetList = null;
-const presets = () =>
-  (presetList ??= shell_presets().map((entry) => {
-    const [name, value] = entry.split('\t');
-    return { name: titled(name), value };
-  }));
-
-function shellOf(c) {
-  const { outline, colour, finish } = choiceOf(c);
-  const preset = presets().find(({ value }) => value.endsWith(` ${colour} ${finish}`));
-  return { outline, colour, finish, auto: !c.shell, name: preset?.name ?? `#${colour}` };
-}
-
-async function lookUp(s, c) {
-  paint(c);
-  try {
-    if (c.crc === null) c.crc = await crcOf(await c.file());
-    if (!dats.has(c.platform)) dats.set(c.platform, Dat.parse(await fetchDat(c.platform)));
-    if (s !== session || fatal) return;
-    c.game = dats.get(c.platform).game_for(c.crc) ?? null;
-    await dress(s, c);
-  } catch (e) {
-    if (trapped(e)) return;
-    logError(c.stem, e);
-  }
-  if (s !== session) return;
-  c.looking = false;
-  paint(c);
-}
-
-function setShell(c, next) {
-  c.shell = next ? `${next.outline} ${next.colour} ${next.finish}` : '';
-}
-
-function setBackground(c, rgb) {
-  c.deep = rgb;
-  c.userHue = !!rgb;
-}
-
-// A CRC can be right about the bytes and wrong about the game: a ROM renamed to another's name.
-function noMatch(c) {
-  c.rejected = true;
-  c.userHue = false;
-  c.deep = null;
-}
-
-// Painted at once, so the editor's buttons are right before the next click; only a drag's
-// follow-on inputs wait for a frame.
-function changed(c, soon = false) {
-  try {
-    if (c.existingPng) c.existing = existing_face(c.existingPng, c.platform, c.code, c.head, c.shell, c.stem);
-  } catch (e) {
-    if (trapped(e)) return;
-    throw e;
-  }
-  if (soon) schedulePaint(c);
-  else paint(c);
-}
-
-const editor = createEditor({
-  name: (c) => clean_label(c.stem),
-  box: boxOf,
-  draw: drawFace,
-  face: (c) => {
-    try {
-      return faceOf(c, stateOf(c));
-    } catch (e) {
-      if (trapped(e)) return null;
-      throw e;
-    }
-  },
-  hex,
-  fromHex,
-  matched: (c) => !!c.game && !c.rejected,
-  canLabel,
-  canBackground: (c) => stateOf(c) === 'ready' && ['logo', 'customLogo'].includes(wearing(c).kind),
-  wearing,
-  available: (c, kind) => available(view(c), kind),
-  realFailed: (c) => !!realOf(c)?.failed,
-  retryReal,
-  fill: () => session?.fill ?? null,
-  tileFace: (c, kind) => {
-    try {
-      return faceFor(c, kind);
-    } catch (e) {
-      if (trapped(e)) return null;
-      throw e;
-    }
-  },
-  choose,
-  useCustomLogo,
-  useCustomLabel,
-  ensureTiles,
-  canShell: (c) => !c.looking && ['ready', 'has-label', 'needs-logo', 'unfilled'].includes(stateOf(c)) && shell_key_ok(c.stem),
-  search: (c, query) => dats.get(c.platform)?.search(query, 30) ?? null,
-  chooseGame,
-  noMatch,
-  readLogo,
-  background: (c) => ({ rgb: c.deep ?? baseDeep(c), auto: !c.userHue }),
-  setBackground,
-  shellOf,
-  setShell,
-  presets,
-  changed,
-});
-
-async function start() {
-  await init();
-  for (const platform of PLATFORMS) faceBox.set(platform, Array.from(cart_size(platform)));
-  // A set of our own, if the address named one. Not having it is not a failure: every cart falls
-  // back to libretro, which is all the page had before there was a set to point at.
-  if (ART_BASE) {
-    try {
-      artIndex = await fetchIndex(ART_BASE);
-      console.info(`art set: ${Object.keys(artIndex).length} checksums from ${ART_BASE}`);
-    } catch (e) {
-      banner(`The art set at ${ART_BASE} didn’t load (${e.message}), so carts get slot’s own labels.`);
-    }
-  }
-  const direct = 'showDirectoryPicker' in window;
-  $('pick').hidden = !direct;
-  $('pick-files-label').hidden = false;
-  $('pick-files-label').classList.toggle('ghost', direct);
-  $('pick-files-text').textContent = direct ? 'Open folder for ZIP export' : 'Choose SD Card';
-
-  $('pick').addEventListener('click', async () => {
-    let root;
-    try {
-      root = await window.showDirectoryPicker({ id: 'slot-card', mode: 'readwrite' });
-    } catch (e) {
-      if (e.name !== 'AbortError') banner(e.message);
-      return;
-    }
-    try {
-      await open(await fromDirectory(root));
-    } catch (e) {
-      banner(e.message);
-    }
-  });
-  $('pick-files').addEventListener('change', async (e) => {
-    // Emptied at once, or choosing the same card again fires no change. The FileList belongs to
-    // the input, so the files are copied out of it first.
-    const files = [...e.target.files];
-    e.target.value = '';
-    try {
-      await open(fromFiles(files));
-    } catch (err) {
-      banner(err.message);
-    }
-  });
-  $('write').addEventListener('click', () => track(writeLabels()));
-  $('fill-open').addEventListener('click', () => track(askFill(session)));
-  for (const kind of ['real', 'logo']) $(`fill-${kind}`).addEventListener('click', () => answerFill(kind));
-  $('fill').addEventListener('cancel', (e) => {
-    if (session?.fill == null) e.preventDefault();
-  });
-
-  // slot's masthead: a row side by side, a list behind a button on a phone.
-  const menu = (open) => {
-    $('mast-links').classList.toggle('is-open', open);
-    $('menu-btn').setAttribute('aria-expanded', String(open));
-  };
-  $('menu-btn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    menu(!$('mast-links').classList.contains('is-open'));
-  });
-  document.addEventListener('click', (e) => {
-    if (!$('menu-btn').contains(e.target)) menu(false);
-  });
-
-
-  // For tools/verify.py, which has no native picker to click. Never set on the published site.
-  if (['localhost', '127.0.0.1'].includes(location.hostname)) {
-    window.__studio = {
-      openFiles: (files) => open(fromFiles(files)),
-      openDirectory: async (root) => open(await fromDirectory(root)),
-      idle: () =>
-        busy === 0 && session !== null && session.carts.every((c) => stateOf(c) !== 'looking'),
-      states: () =>
-        session
-          ? session.carts.map((c) => ({
-              platform: c.platform,
-              stem: c.stem,
-              state: stateOf(c),
-              game: c.game,
-              deep: hex(c.deep ?? baseDeep(c)),
-              band: !!bandOf(c),
-              logo: (wearing(c).kind === 'customLogo' ? c.customLogoBytes : c.logoBytes)?.length ?? 0,
-              wears: wearing(c).kind,
-              why: wearing(c).why,
-            }))
-          : [],
-      shells: () => (session ? session.carts.map((c) => ({ stem: c.stem, shell: c.shell })) : []),
-      shellPresets: () => shell_presets(),
-      editing: () => editor.current()?.stem ?? null,
-      artBase: () => ART_BASE,
-      fill: () => session?.fill ?? null,
+        (crate::cart::GB_LABEL_W, crate::cart::GB_LABEL_H)
     };
-  }
-  $('startup').hidden = true;
-  document.body.dataset.ready = 'true';
+    let well = ww as f32 / wh as f32;
+    if lw as f32 / lh as f32 > well {
+        let vw = ((lh as f32 * well).round() as u32).min(lw);
+        let x0 = (lw - vw) / 2;
+        (x0, 0, x0 + vw, lh)
+    } else {
+        let vh = ((lw as f32 / well).round() as u32).min(lh);
+        let y0 = (lh - vh) / 2;
+        (0, y0, lw, y0 + vh)
+    }
 }
 
-$('build').append(
-  BUILD === 'dev'
-    ? 'dev'
-    : Object.assign(document.createElement('a'), {
-        href: `https://github.com/jgraving/slot-cart-studio/commit/${BUILD}`,
-        textContent: BUILD.slice(0, 7),
-      }),
-);
-start().catch((error) => {
-  $('startup').hidden = true;
-  logError('startup', error);
-  banner('Cart Studio could not start. Reload the page to try again.');
-});
+/// The logo over the gradient, and the band if there is one, as opaque RGBA.
+#[allow(clippy::too_many_arguments)]
+pub fn compose(
+    logo: &[u8],
+    w: u32,
+    h: u32,
+    lw: u32,
+    lh: u32,
+    deep: [u8; 3],
+    pale: [u8; 3],
+    band: Option<Band>,
+) -> Vec<u8> {
+    let mut ground = gradient(lw, lh, deep, pale);
+    if let Some(b) = band {
+        let (x0, y0, x1, y1) = b.strip(lw, lh);
+        for y in y0..y1 {
+            for x in x0..x1 {
+                let i = ((y * lw + x) * 4) as usize;
+                ground[i..i + 3].copy_from_slice(&b.colour);
+            }
+        }
+    }
+    let Some(bounds) = trim(logo, w, h) else {
+        return ground;
+    };
+    let (tw, th) = (bounds.2 - bounds.0, bounds.3 - bounds.1);
+    let Some(src) = IntSize::from_wh(tw, th)
+        .and_then(|size| Pixmap::from_vec(premultiplied(logo, w, bounds), size))
+    else {
+        return ground;
+    };
+    let size = IntSize::from_wh(lw, lh).expect("the label's size is not zero");
+    let mut dst = Pixmap::from_vec(ground, size).expect("the gradient is the label's size");
+    let (ax, ay, aw, ah) = band.map_or((0, 0, lw, lh), |b| b.rest(lw, lh));
+    let (scale, x, y) = placement(aw, ah, tw, th);
+    let paint = PixmapPaint {
+        quality: FilterQuality::Bicubic,
+        ..PixmapPaint::default()
+    };
+    dst.draw_pixmap(
+        0,
+        0,
+        src.as_ref(),
+        &paint,
+        Transform::from_row(scale, 0.0, 0.0, scale, x + ax as f32, y + ay as f32),
+        None,
+    );
+    // The ground is opaque everywhere, so premultiplied and straight are the same bytes.
+    dst.take()
+}
+
+/// One logo over a ground, recomposed whenever that ground's colour moves, or a whole label
+/// given as it is.
+pub struct Label {
+    /// The logo and its size; `None` for a whole label, which has no ground to recompose.
+    logo: Option<(Vec<u8>, u32, u32)>,
+    /// The label's own size, which is the well's shape for the platform it was made for.
+    lw: u32,
+    lh: u32,
+    deep: [u8; 3],
+    band: Option<Band>,
+    rgba: Vec<u8>,
+}
+
+impl Label {
+    /// `None` for bytes slot's decoder would refuse. `deep` is the ground's top-left corner,
+    /// whether the page computed it from box art or you picked it by hand; the pale corner is
+    /// derived from it, so one colour describes the whole ground.
+    pub fn from_png(
+        png: &[u8],
+        deep: [u8; 3],
+        platform: Platform,
+        band: Option<Band>,
+    ) -> Option<Label> {
+        let (logo, w, h) = art::decode(png)?;
+        let (lw, lh) = size(platform);
+        let rgba = compose(&logo, w, h, lw, lh, deep, pale_for(deep), band);
+        Some(Label {
+            logo: Some((logo, w, h)),
+            lw,
+            lh,
+            deep,
+            band,
+            rgba,
+        })
+    }
+
+    /// A whole label, cropped to fill the platform's label as slot's cover would, so nothing of
+    /// it is shrunk. Eligible scanner borders are cleared before alpha-aware resizing.
+    pub fn full(png: &[u8], platform: Platform) -> Option<Label> {
+        let (mut art, w, h) = art::decode(png)?;
+        crate::label_mask::clear_corner_background(&mut art, w, h);
+        let (lw, lh) = size(platform);
+        let rgba = art::cover_rgba(&art, w, h, lw, lh)?;
+        Some(Label {
+            logo: None,
+            lw,
+            lh,
+            deep: [0; 3],
+            band: None,
+            rgba,
+        })
+    }
+
+    pub fn deep(&self) -> Vec<u8> {
+        self.deep.to_vec()
+    }
+
+    pub fn set_deep(&mut self, deep: &[u8]) {
+        let Some((logo, w, h)) = &self.logo else {
+            return;
+        };
+        self.deep = [deep[0], deep[1], deep[2]];
+        self.rgba = compose(
+            logo,
+            *w,
+            *h,
+            self.lw,
+            self.lh,
+            self.deep,
+            pale_for(self.deep),
+            self.band,
+        );
+    }
+
+    /// Slot's cart face with this label on it.
+    pub fn face(
+        &self,
+        platform: Platform,
+        code: &str,
+        head: &[u8],
+        shell: &str,
+        stem: &str,
+    ) -> Vec<u8> {
+        face::from_rgba(
+            &self.rgba, self.lw, self.lh, platform, code, head, shell, stem,
+        )
+    }
+
+    /// Keep transparent scan corners in RGBA; opaque compositions retain compact RGB.
+    pub fn png(&self) -> Vec<u8> {
+        let alpha = self.rgba.chunks_exact(4).any(|p| p[3] != 255);
+        let pixels: Vec<u8> = if alpha { self.rgba.clone() } else {
+            self.rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect()
+        };
+        let mut out = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut out, self.lw, self.lh);
+            enc.set_color(if alpha { png::ColorType::Rgba } else { png::ColorType::Rgb });
+            enc.set_depth(png::BitDepth::Eight);
+            enc.write_header()
+                .expect("a PNG header writes into a Vec")
+                .write_image_data(&pixels)
+                .expect("PNG data writes into a Vec");
+        }
+        out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const INK: [u8; 4] = [10, 200, 30, 255];
+
+    fn solid(w: u32, h: u32) -> Vec<u8> {
+        INK.repeat((w * h) as usize)
+    }
+
+    fn at(rgba: &[u8], x: u32, y: u32) -> [u8; 3] {
+        let i = ((y * W + x) * 4) as usize;
+        [rgba[i], rgba[i + 1], rgba[i + 2]]
+    }
+
+    /// The first and last rows, down column 640, where the label isn't bare gradient.
+    /// A ground for tests: the computed pair for a hue, under a logo bright enough to keep the
+    /// deep treatment, which is what every placement test below draws on.
+    fn ground_for(hue: u16) -> ([u8; 3], [u8; 3]) {
+        stops(hue, BRIGHT + 1.0)
+    }
+
+    fn logo_rows(label: &[u8], hue: u16) -> (u32, u32) {
+        let (deep, pale) = ground_for(hue);
+        let ground = gradient(W, H, deep, pale);
+        let rows: Vec<u32> = (0..H)
+            .filter(|y| at(label, 640, *y) != at(&ground, 640, *y))
+            .collect();
+        (rows[0], *rows.last().expect("a logo row"))
+    }
+
+    fn near(a: [u8; 3], b: [u8; 3], by: i32) -> bool {
+        (0..3).all(|c| (a[c] as i32 - b[c] as i32).abs() <= by)
+    }
+
+    /// The olive band, at both its edges and on the branch it must not touch. Bomberman's ground
+    /// was hue 55 taken deep, and the Legend of Zelda's cream is that same hue taken pale: the
+    /// rotation is for the first and would ruin the second.
+    #[test]
+    fn a_yellow_ground_going_deep_turns_to_amber() {
+        let bright = BRIGHT + 1.0;
+        assert_eq!(stops(55, bright), stops(AMBER as u16, bright));
+        assert_eq!(stops(OLIVE_LO, bright), stops(AMBER as u16, bright));
+        assert_eq!(stops(OLIVE_HI, bright), stops(AMBER as u16, bright));
+
+        // A hue either side of the band keeps its own, Advance Wars 2's amber cover included.
+        for hue in [OLIVE_LO - 1, OLIVE_HI + 1, 35, 105, 235] {
+            assert_eq!(
+                stops(hue, bright).0,
+                hue::hsl_to_rgb(hue as f32, 0.65, 0.24),
+                "hue {hue} was turned"
+            );
+        }
+
+        // A dark logo takes the pale branch, which the rotation never reaches.
+        let dark = BRIGHT - 1.0;
+        assert_eq!(stops(55, dark).0, hue::hsl_to_rgb(55.0, 0.55, 0.62));
+    }
+
+    #[test]
+    fn the_corners_are_the_stops() {
+        let (deep, pale) = ground_for(200);
+        let g = gradient(W, H, deep, pale);
+        assert_eq!(at(&g, 0, 0), deep);
+        // The house formula puts t at 0.9991 here, not 1.
+        assert!(near(at(&g, W - 1, H - 1), pale, 1));
+    }
+
+    #[test]
+    fn a_bright_logo_gets_a_deep_ground_and_a_dark_one_gets_a_pale_ground() {
+        assert_eq!(
+            stops(0, BRIGHT + 1.0),
+            (
+                hue::hsl_to_rgb(0.0, 0.65, 0.24),
+                hue::hsl_to_rgb(0.0, 0.60, 0.46)
+            )
+        );
+        assert_eq!(
+            stops(0, BRIGHT - 1.0),
+            (
+                hue::hsl_to_rgb(0.0, 0.55, 0.62),
+                hue::hsl_to_rgb(0.0, 0.50, 0.84)
+            )
+        );
+    }
+
+    #[test]
+    fn a_picked_colour_keeps_its_hue_and_lifts_toward_the_light() {
+        let deep = hue::hsl_to_rgb(210.0, 0.65, 0.24);
+        let pale = pale_for(deep);
+        let (dh, ds, dl) = hue::rgb_to_hsl(deep);
+        let (ph, ps, pl) = hue::rgb_to_hsl(pale);
+        assert!((ph - dh).abs() <= 1.0, "hue moved from {dh} to {ph}");
+        assert!(pl > dl, "pale {pl} is not lighter than deep {dl}");
+        assert!((pl - dl - 0.22).abs() <= 0.01, "lift was {}", pl - dl);
+        assert!(ps < ds, "pale {ps} is not eased off {ds}");
+    }
+
+    #[test]
+    fn a_tall_logo_fills_the_box_from_its_top_row() {
+        let (deep, pale) = ground_for(30);
+        let label = compose(&solid(100, 100), 100, 100, W, H, deep, pale, None);
+        let (first, last) = logo_rows(&label, 30);
+        let row = |r: f32| (r * H as f32 / 640.0).round() as u32;
+        assert!(
+            (row(70.0) - 1..=row(70.0) + 1).contains(&first),
+            "first logo row {first}"
+        );
+        assert!(
+            (row(493.0) - 2..=row(493.0)).contains(&last),
+            "last logo row {last}"
+        );
+        assert!(near(at(&label, 640, 280), [INK[0], INK[1], INK[2]], 2));
+    }
+
+    #[test]
+    fn a_wide_logo_centres_on_the_middle_row() {
+        let (deep, pale) = ground_for(30);
+        let label = compose(&solid(400, 40), 400, 40, W, H, deep, pale, None);
+        let (first, last) = logo_rows(&label, 30);
+        let mid = (first + last) as f32 / 2.0;
+        assert!(
+            (mid - H as f32 / 2.0).abs() <= 1.0,
+            "logo centred on row {mid}"
+        );
+        // 920 wide from 400 is a scale of 2.3, so 92 rows.
+        assert!((90..=93).contains(&(last - first)), "rows {first}..{last}");
+    }
+
+    #[test]
+    fn transparent_margins_and_a_faint_fringe_do_not_count() {
+        let mut logo = vec![0u8; 200 * 200 * 4];
+        for y in 50..150 {
+            for x in 50..150 {
+                let i = (y * 200 + x) * 4;
+                logo[i..i + 4].copy_from_slice(&INK);
+            }
+        }
+        logo[3] = 15;
+        assert_eq!(trim(&logo, 200, 200), Some((50, 50, 150, 150)));
+        let (deep, pale) = ground_for(30);
+        assert!(
+            compose(&logo, 200, 200, W, H, deep, pale, None)
+                == compose(&solid(100, 100), 100, 100, W, H, deep, pale, None)
+        );
+    }
+
+    #[test]
+    fn an_invisible_logo_leaves_the_bare_gradient() {
+        let (deep, pale) = ground_for(90);
+        assert!(
+            compose(&[0u8; 16 * 16 * 4], 16, 16, W, H, deep, pale, None)
+                == gradient(W, H, deep, pale)
+        );
+    }
+
+    #[test]
+    fn the_png_is_rgb_at_the_gba_size() {
+        let mut logo = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut logo, 8, 4);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.write_header()
+                .unwrap()
+                .write_image_data(&solid(8, 4))
+                .unwrap();
+        }
+        let deep = hue::hsl_to_rgb(45.0, 0.65, 0.24);
+        let label = Label::from_png(&logo, deep, Platform::Gba, None).expect("logo decodes");
+        assert_eq!(label.deep(), deep.to_vec());
+        let out = label.png();
+        let reader = png::Decoder::new(std::io::Cursor::new(out))
+            .read_info()
+            .unwrap();
+        let info = reader.info();
+        assert_eq!(
+            (info.width, info.height, info.color_type, info.bit_depth),
+            (W, H, png::ColorType::Rgb, png::BitDepth::Eight)
+        );
+    }
+
+    #[test]
+    fn bytes_that_are_not_a_png_make_no_label() {
+        assert!(Label::from_png(b"not a png", [101, 68, 21], Platform::Gba, None).is_none());
+    }
+
+    /// A Game Boy label is its own well's shape, not the GBA one's. slot covers a well with what
+    /// it is given, so a wide label on a near-square well loses its sides: composing at the well's ratio
+    /// is what stops a wide wordmark being cropped to its middle.
+    #[test]
+    fn a_game_boy_label_is_the_shape_of_its_own_well() {
+        assert_eq!(size(Platform::Gba), (W, H));
+        assert_eq!(size(Platform::Gb), (GB_W, GB_H));
+        assert_eq!(size(Platform::Gbc), (GB_W, GB_H));
+
+        let want = crate::cart::GB_LABEL_W as f32 / crate::cart::GB_LABEL_H as f32;
+        let got = GB_W as f32 / GB_H as f32;
+        assert!((got - want).abs() < 0.01, "{got} is not the well's {want}");
+
+        // And what comes out carries it.
+        let mut logo = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut logo, 8, 4);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.write_header()
+                .unwrap()
+                .write_image_data(&solid(8, 4))
+                .unwrap();
+        }
+        let deep = hue::hsl_to_rgb(200.0, 0.65, 0.24);
+        for (platform, want) in [(Platform::Gba, (W, H)), (Platform::Gbc, (GB_W, GB_H))] {
+            let label = Label::from_png(&logo, deep, platform, None).expect("logo decodes");
+            let reader = png::Decoder::new(std::io::Cursor::new(label.png()))
+                .read_info()
+                .unwrap();
+            let info = reader.info();
+            assert_eq!((info.width, info.height), want, "{platform:?}");
+        }
+    }
+    #[test]
+    fn a_band_is_drawn_along_its_edge_and_the_logo_stays_off_it() {
+        let (deep, pale) = ground_for(30);
+        let band = Band {
+            edge: Edge::Top,
+            size: 0.2,
+            colour: [200, 10, 20],
+        };
+        let label = compose(&solid(100, 100), 100, 100, W, H, deep, pale, Some(band));
+        let strip = (H as f32 * 0.2).round() as u32;
+        for y in 0..strip {
+            for x in (0..W).step_by(37) {
+                assert_eq!(at(&label, x, y), [200, 10, 20], "band at {x},{y}");
+            }
+        }
+        let ink = [INK[0], INK[1], INK[2]];
+        let first_ink = (0..H)
+            .find(|y| (0..W).step_by(4).any(|x| near(at(&label, x, *y), ink, 2)))
+            .expect("a logo row");
+        assert!(
+            first_ink >= strip,
+            "logo starts at row {first_ink}, inside the band"
+        );
+    }
+
+    #[test]
+    fn set_deep_keeps_the_band() {
+        let mut logo = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut logo, 8, 4);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.write_header()
+                .unwrap()
+                .write_image_data(&solid(8, 4))
+                .unwrap();
+        }
+        let band = Band {
+            edge: Edge::Left,
+            size: 0.1,
+            colour: [5, 150, 60],
+        };
+        let mut label =
+            Label::from_png(&logo, [60, 20, 90], Platform::Gba, Some(band)).expect("decodes");
+        label.set_deep(&[20, 90, 60]);
+        let mut reader = png::Decoder::new(std::io::Cursor::new(label.png()))
+            .read_info()
+            .unwrap();
+        let mut rgb = vec![0; reader.output_buffer_size()];
+        reader.next_frame(&mut rgb).unwrap();
+        assert_eq!(
+            &rgb[..3],
+            &[5, 150, 60],
+            "the band's corner after Label Color moved"
+        );
+    }
+
+    fn png_of(rgba: &[u8], w: u32, h: u32) -> Vec<u8> {
+        let mut out = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut out, w, h);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.write_header().unwrap().write_image_data(rgba).unwrap();
+        }
+        out
+    }
+
+    fn rgb_of(png: &[u8]) -> (Vec<u8>, u32, u32) {
+        let mut reader = png::Decoder::new(std::io::Cursor::new(png))
+            .read_info()
+            .unwrap();
+        let mut rgb = vec![0; reader.output_buffer_size()];
+        let info = reader.next_frame(&mut rgb).unwrap();
+        (rgb, info.width, info.height)
+    }
+
+    #[test]
+    fn a_full_label_fills_the_platforms_label_edge_to_edge() {
+        let ink = [INK[0], INK[1], INK[2]];
+        for (platform, want) in [(Platform::Gba, (W, H)), (Platform::Gbc, (GB_W, GB_H))] {
+            let label =
+                Label::full(&png_of(&solid(600, 290), 600, 290), platform).expect("decodes");
+            let (rgb, w, h) = rgb_of(&label.png());
+            assert_eq!((w, h), want, "{platform:?}");
+            for (x, y) in [
+                (0, 0),
+                (w - 1, 0),
+                (0, h - 1),
+                (w - 1, h - 1),
+                (w / 2, h / 2),
+            ] {
+                let i = ((y * w + x) * 3) as usize;
+                assert_eq!(&rgb[i..i + 3], &ink, "{platform:?} at {x},{y}");
+            }
+        }
+    }
+
+    /// A square scan on the GBA label loses its top and bottom, as slot's cover would, rather
+    /// than shrinking to fit between bars.
+    #[test]
+    fn a_full_label_is_cropped_to_fill_not_shrunk() {
+        let mut art = solid(400, 400);
+        for y in (0..90).chain(310..400) {
+            for x in 0..400 {
+                let i = ((y * 400 + x) * 4) as usize;
+                art[i..i + 4].copy_from_slice(&[250, 0, 0, 255]);
+            }
+        }
+        let label = Label::full(&png_of(&art, 400, 400), Platform::Gba).expect("decodes");
+        let (rgb, _, _) = rgb_of(&label.png());
+        assert!(
+            rgb.chunks_exact(3).all(|p| p == [INK[0], INK[1], INK[2]]),
+            "the cropped rows showed"
+        );
+    }
+
+    #[test]
+    fn a_full_label_shows_on_the_cart_face_to_its_corners() {
+        let label =
+            Label::full(&png_of(&solid(512, 256), 512, 256), Platform::Gba).expect("decodes");
+        let face = label.face(Platform::Gba, "", &[], "", "Probe");
+        let (x0, y0) = (crate::cart::LABEL_X + 1, crate::cart::LABEL_Y + 1);
+        let (x1, y1) = (
+            crate::cart::LABEL_X + crate::cart::LABEL_W - 2,
+            crate::cart::LABEL_Y + crate::cart::LABEL_H - 2,
+        );
+        for (x, y) in [(x0, y0), (x1, y0), (x0, y1), (x1, y1)] {
+            let i = ((y * crate::cart::CART_W + x) * 4) as usize;
+            assert!(
+                near(
+                    [face[i], face[i + 1], face[i + 2]],
+                    [INK[0], INK[1], INK[2]],
+                    24
+                ),
+                "at {x},{y}: {:?}",
+                &face[i..i + 3]
+            );
+        }
+    }
+
+    #[test]
+    fn a_ground_colour_leaves_a_full_label_alone() {
+        let mut label =
+            Label::full(&png_of(&solid(64, 32), 64, 32), Platform::Gba).expect("decodes");
+        let before = label.png();
+        label.set_deep(&[200, 30, 90]);
+        assert_eq!(label.png(), before);
+    }
+
+    #[test]
+    fn bytes_that_are_not_a_png_make_no_full_label() {
+        assert!(Label::full(b"not a png", Platform::Gba).is_none());
+    }
+
+    #[test]
+    fn a_band_parses_only_from_a_known_edge_and_a_real_size() {
+        assert_eq!(
+            Band::parse("top", 0.2, &[1, 2, 3]),
+            Some(Band {
+                edge: Edge::Top,
+                size: 0.2,
+                colour: [1, 2, 3]
+            })
+        );
+        assert_eq!(Band::parse("", 0.2, &[1, 2, 3]), None);
+        assert_eq!(Band::parse("middle", 0.2, &[1, 2, 3]), None);
+        assert_eq!(Band::parse("top", 0.0, &[1, 2, 3]), None);
+        assert_eq!(Band::parse("top", 0.2, &[1, 2]), None);
+    }
+
+    /// slot crops a GBA label to its well's shape, so a band thin enough to live in the cropped
+    /// rows would never be seen. The band sits in the part slot shows, and shows on the cart.
+    #[test]
+    fn a_thin_top_band_shows_on_the_cart_face() {
+        let mut logo = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut logo, 8, 4);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.write_header()
+                .unwrap()
+                .write_image_data(&solid(8, 4))
+                .unwrap();
+        }
+        let band = Band {
+            edge: Edge::Top,
+            size: 0.046,
+            colour: [172, 13, 0],
+        };
+        let label =
+            Label::from_png(&logo, [20, 20, 30], Platform::Gba, Some(band)).expect("decodes");
+        let face = label.face(Platform::Gba, "", &[], "", "Probe");
+        let (x, y) = (
+            crate::cart::LABEL_X + crate::cart::LABEL_W / 2,
+            crate::cart::LABEL_Y + 1,
+        );
+        let i = ((y * crate::cart::CART_W + x) * 4) as usize;
+        assert!(
+            near([face[i], face[i + 1], face[i + 2]], [172, 13, 0], 24),
+            "{:?}",
+            &face[i..i + 3]
+        );
+    }
+}

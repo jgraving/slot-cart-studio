@@ -1,4 +1,4 @@
-//! slot cart studio. Four of slot's own source files are compiled here unchanged, so a preview
+//! slot cart studio. The pinned slot.sp renderer source files are compiled here unchanged, so a preview
 //! is the device's cart face rather than an imitation of it. They reach each other through
 //! `crate::` paths, which is why they sit at the root. `art` is the one module swapped out:
 //! slot's reads a label from disk, and a browser has no disk.
@@ -19,6 +19,27 @@ mod silhouette;
 #[rustfmt::skip]
 #[path = "../../slot/crates/slot-ui/src/text.rs"]
 mod text;
+
+#[allow(dead_code)]
+#[path = "../../slot/crates/slot-ui/src/bitmaps.rs"]
+mod bitmaps;
+#[allow(dead_code)]
+#[path = "../../slot/crates/slot-ui/src/material.rs"]
+mod material;
+#[allow(dead_code)]
+#[path = "../../slot/crates/slot-ui/src/label_mask.rs"]
+mod label_mask;
+#[allow(dead_code)]
+#[path = "../../slot/crates/slot-ui/src/label_fit.rs"]
+mod label_fit;
+#[allow(dead_code)]
+#[path = "../../slot/crates/slot-ui/src/art.rs"]
+mod device_art;
+// The cart renderer only needs the board's dimensions, not its interactive UI.
+mod board {
+    pub const BOARD_W: u32 = crate::cart::CART_W;
+    pub const BOARD_H: u32 = crate::cart::CART_H;
+}
 
 mod art;
 pub mod choice;

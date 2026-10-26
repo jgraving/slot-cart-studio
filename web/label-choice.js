@@ -21,6 +21,7 @@ export function wears(c) {
     case 'real':
     case 'logo':
       if (available(c, c.choice)) return { kind: c.choice, why };
+      if (c.byHand) return { kind: 'none', why: 'nothing' };
       if (available(c, OTHER[c.choice])) return { kind: OTHER[c.choice], why: 'fallback' };
       return { kind: 'none', why: 'nothing' };
     default:
@@ -61,4 +62,11 @@ export function fillText({ unlabelled }) {
 export function autoFill({ real, logo }) {
   if (real > 0 && logo > 0) return null;
   return real > 0 ? 'real' : 'logo';
+}
+
+// Missing downloadable artwork remains a usable choice through a local PNG.
+export function uploadKind(c, kind) {
+  if (kind === 'real' && !available(c, kind)) return 'customLabel';
+  if (kind === 'logo' && !available(c, kind)) return 'customLogo';
+  return null;
 }

@@ -681,7 +681,7 @@ async function dress(s, c) {
       : limit(async () =>
           s === session && !fatal ? fetchThumb(c.platform, folder, name, stub_target) : null,
         ).catch(noImage);
-  // Logos come from our own set alone, by checksum; libretro is asked only for box art.
+  // Prefer the checksum catalog, then use libretro logos where the system provides them.
   const ours = (media) => {
     const path = key && artIndex?.[key]?.[media];
     if (!path) return Promise.resolve(null);
@@ -693,7 +693,7 @@ async function dress(s, c) {
   // after the logo.
   const boxJob = thumb('Named_Boxarts');
   if (!c.logoBytes) {
-    const logo = await ours('wheel');
+    const logo = (await ours('wheel')) ?? (await thumb('Named_Logos'));
     if (s !== session || fatal) return;
     c.logoBytes = logo && readable(logo) ? logo : null;
     // How bright the logo is decides which way its ground goes, so it is measured with the logo.

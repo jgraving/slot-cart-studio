@@ -2,6 +2,7 @@
 // studio's api, one history step at a time.
 import { canRedo, canRevert, canUndo, commit, redo, revert, undo, visit, visited } from './history.js';
 import { arrange } from './palette.js';
+import { uploadKind } from './label-choice.js';
 
 const $ = (id) => document.getElementById(id);
 const OPENERS = { 'ed-games': 'ed-game', 'ed-bg-pal': 'ed-bg', 'ed-shell-pal': 'ed-shell' };
@@ -119,12 +120,12 @@ export function createEditor(api) {
       const ok = api.available(c, kind);
       const retry = kind === 'real' && api.realFailed(c);
       tile.hidden = kind === 'card' && !ok;
-      tile.disabled = !can || (!ok && !retry && kind !== 'customLogo' && kind !== 'customLabel');
+      tile.disabled = !can;
       tile.setAttribute('aria-pressed', String(wearing.kind === kind));
       const badge = tile.querySelector('.badge.default');
       if (badge) badge.hidden = fill !== kind;
       const small = tile.querySelector('small');
-      if (small && (kind === 'real' || kind === 'logo')) small.textContent = retry ? 'Couldn’t load. Click to try again' : ok ? '' : 'None for this game';
+      if (small && (kind === 'real' || kind === 'logo')) small.textContent = retry ? 'Couldn’t load. Click to try again' : ok ? '' : kind === 'real' ? 'Choose a label PNG' : 'Choose a logo PNG';
       const hasFile = kind === 'customLogo' ? !!c.customLogoBytes : kind === 'customLabel' ? !!c.customLabelBytes : true;
       tile.classList.toggle('has-file', hasFile);
       if (small && (kind === 'customLogo' || kind === 'customLabel')) small.textContent = hasFile ? 'Click again to use another file' : '';
@@ -250,6 +251,12 @@ export function createEditor(api) {
     if (!tile || tile.disabled) return;
     const kind = tile.dataset.kind;
     const c = cart;
+    const upload = uploadKind({ hasReal: api.available(c, 'real'), hasLogo: api.available(c, 'logo') }, kind);
+    if (upload && !(kind === 'real' && api.realFailed(c))) {
+      picking = upload;
+      $('ed-file').click();
+      return;
+    }
     const file = kind === 'customLogo' ? c.customLogoBytes : kind === 'customLabel' ? c.customLabelBytes : null;
     if ((kind === 'customLogo' || kind === 'customLabel') && (!file || c.choice === kind)) {
       picking = kind;
