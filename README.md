@@ -5,6 +5,8 @@
 Find artwork for your games, design cartridge labels and choose colors and finishes. Preview your changes before saving them to the card.
 
 - **Real labels or logos.** Look up existing artwork, or bring your own PNG.
+- **Clean scan edges.** Rounded black or white scanner borders are cleared using the handheld’s preprocessing. Transparent label corners stay transparent when saved.
+- **Matching cartridges.** The current slot.sp moulds, textured plastic and clear-shell interiors are used for previews.
 - **Your colors.** Adjust the label background, cartridge color and finish.
 - **Save your way.** Chrome and Edge can write to the SD card. Folder import also lets you export a ZIP.
 - **Runs on your device.** This is a static website: game files, labels and edits stay on your device. Studio never uploads your files or stores them on a server. Game databases and artwork are downloaded as needed.
@@ -13,9 +15,9 @@ Choose the top folder of your card—the one containing `Games` and `Labels`. Ma
 
 ## Development
 
-The app is built into the slot.sp GitHub Pages website from a pinned revision of this repository. Its renderer source is pinned separately in `slot.ref`. The workflow runs the native rendering and file-handling tests, builds the WebAssembly app, and uploads `cart-studio-web` for review. It does not deploy to the upstream domain or use upstream Cloudflare credentials.
+The app is built into the slot.sp GitHub Pages website from a pinned revision of this repository. Its renderer repository and revision are pinned separately in `slot.repo` and `slot.ref`. The workflow runs the native rendering and file-handling tests, builds the WebAssembly app, and uploads `cart-studio-web` for review. It does not deploy to the upstream domain or use upstream Cloudflare credentials.
 
-To build locally, check out the renderer repository beside this one as `../slot` at the revision in `slot.ref`, then run:
+To build locally, check out the repository named in `slot.repo` beside this one as `../slot` at the revision in `slot.ref`, then run:
 
 ```sh
 cargo test --locked
@@ -24,7 +26,7 @@ wasm-pack build --release --target web --no-typescript --out-dir web/pkg
 cp LICENSE web/LICENSE
 ```
 
-Logo lookup uses the CORS-enabled libretro sources by default. An optional scanned-label collection can be selected with `?art=https://your-art-host/`; that host must allow the Studio origin through CORS.
+Logo lookup uses the CORS-enabled libretro sources by default where available. Missing label/logo choices open a local PNG picker; explicit single-cart choices do not silently switch styles. An optional scanned-label collection can be selected with `?art=https://your-art-host/`; that host must allow the Studio origin through CORS.
 
 The web theme uses the self-hosted Google Sans Flex from the slot.sp website. See the renderer's font licenses for its preview text.
 

@@ -22,10 +22,12 @@ jobs:
         with:
           path: slot-cart-studio
       - id: pin
-        run: echo "ref=$(cat slot-cart-studio/slot.ref)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "ref=$(cat slot-cart-studio/slot.ref)" >> "$GITHUB_OUTPUT"
+          echo "repository=$(cat slot-cart-studio/slot.repo)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v7
         with:
-          repository: BrandonKowalski/slot
+          repository: ${{ steps.pin.outputs.repository }}
           ref: ${{ steps.pin.outputs.ref }}
           path: slot
       - uses: actions/setup-node@v6
@@ -40,7 +42,14 @@ jobs:
           node --test web/*.test.mjs
       - name: Test label generation and cartridge previews
         working-directory: slot-cart-studio
-        run: cargo test --locked
+        run: |
+          cargo test --locked
+          cargo run --locked --example renderer_preview -- "$RUNNER_TEMP/studio-previews"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cart-studio-previews
+          path: ${{ runner.temp }}/studio-previews
+          if-no-files-found: error
       - name: Install wasm-pack
         run: |
           set -eu

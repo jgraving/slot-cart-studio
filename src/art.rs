@@ -1,7 +1,5 @@
-//! Slot's `art::cover`, fed from memory. Slot's module opens the label's path, which a browser
-//! cannot do, so this one looks the path up in a stash `face` fills for the length of one draw.
-//! The decode and the cover are slot's code line for line, apart from the decode's bound on the
-//! frame buffer, and `tests/face.rs` holds the result to slot's pixel for pixel.
+//! Browser label storage backed by the pinned device decoder, cleanup and resizer.
+//! Only disk access is replaced with a per-render in-memory stash.
 
 use std::cell::RefCell;
 use std::path::Path;
@@ -42,65 +40,18 @@ fn with<R>(label: Stashed, f: impl FnOnce(&Path) -> R) -> R {
 }
 
 /// Slot's signature. `path` is the stash key `face` handed to `cart_face`.
-pub(crate) fn cover(path: &Path, w: u32, h: u32) -> Option<Vec<u8>> {
-    if path != Path::new(KEY) {
-        return None;
-    }
-    STASH.with(|s| match s.borrow().as_ref()? {
-        Stashed::Png(bytes) => {
-            let (src, sw, sh) = decode(bytes)?;
-            cover_rgba(&src, sw, sh, w, h)
-        }
-        Stashed::Rgba { px, w: sw, h: sh } => cover_rgba(px, *sw, *sh, w, h),
-    })
+pub(crate) fn cover_label(path: &Path, w: u32, h: u32) -> Option<Vec<u8>> {
+    if path != Path::new(KEY) { return None; }
+    let (mut src, sw, sh) = STASH.with(|s| match s.borrow().as_ref()? {
+        Stashed::Png(bytes) => decode(bytes),
+        Stashed::Rgba { px, w, h } => Some((px.clone(), *w, *h)),
+    })?;
+    crate::label_mask::clear_corner_background(&mut src, sw, sh);
+    cover_rgba(&src, sw, sh, w, h)
 }
 
-pub(crate) fn cover_rgba(src: &[u8], sw: u32, sh: u32, w: u32, h: u32) -> Option<Vec<u8>> {
-    if sw == 0 || sh == 0 {
-        return None;
-    }
-
-    let scale = (w as f32 / sw as f32).max(h as f32 / sh as f32);
-    let ox = (sw as f32 - w as f32 / scale) / 2.0;
-    let oy = (sh as f32 - h as f32 / scale) / 2.0;
-
-    let mut out = vec![0u8; (w * h * 4) as usize];
-    for y in 0..h {
-        let y0 = oy + y as f32 / scale;
-        let y1 = oy + (y + 1) as f32 / scale;
-        for x in 0..w {
-            let x0 = ox + x as f32 / scale;
-            let x1 = ox + (x + 1) as f32 / scale;
-            let px = box_average(src, sw, sh, x0, y0, x1, y1);
-            out[((y * w + x) * 4) as usize..][..4].copy_from_slice(&px);
-        }
-    }
-    Some(out)
-}
-
-fn box_average(src: &[u8], sw: u32, sh: u32, x0: f32, y0: f32, x1: f32, y1: f32) -> [u8; 4] {
-    let xa = (x0.floor().max(0.0) as u32).min(sw - 1);
-    let ya = (y0.floor().max(0.0) as u32).min(sh - 1);
-    let xb = ((x1.ceil() as u32).max(xa + 1)).min(sw);
-    let yb = ((y1.ceil() as u32).max(ya + 1)).min(sh);
-
-    let mut acc = [0u32; 4];
-    let mut n = 0u32;
-    for y in ya..yb {
-        for x in xa..xb {
-            let i = ((y * sw + x) * 4) as usize;
-            for c in 0..4 {
-                acc[c] += src[i + c] as u32;
-            }
-            n += 1;
-        }
-    }
-    let mut out = [0u8; 4];
-    for c in 0..4 {
-        out[c] = ((acc[c] + n / 2) / n) as u8;
-    }
-    out
-}
+// Share the device's decoder, alpha-aware resizer and SVG renderer.
+pub(crate) use crate::device_art::{cover_rgba, decode_png_bytes, render_svg};
 
 /// Straight RGBA, with slot's decoder settings. `label` and `hue` decode through here too, so a
 /// logo the studio accepts is one slot would.
@@ -109,40 +60,14 @@ pub(crate) fn decode(png: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
     dec.set_transformations(png::Transformations::normalize_to_color8());
     dec.set_limits(png::Limits { bytes: 64 << 20 });
 
-    let mut reader = dec.read_info().ok()?;
+    let reader = dec.read_info().ok()?;
     // Unlike slot's art.rs, a frame over 64 MiB is refused before it is allocated. The limit above
     // doesn't cover this buffer, which is sized from the header alone, so a 45-byte PNG can ask
     // for gigabytes; on wasm32 that traps and leaves the page unusable.
     if reader.output_buffer_size() > 64 << 20 {
         return None;
     }
-    let mut buf = vec![0u8; reader.output_buffer_size()];
-    let info = reader.next_frame(&mut buf).ok()?;
-    let src = &buf[..info.buffer_size()];
-    let n = (info.width * info.height) as usize;
-
-    let mut rgba = vec![255u8; n * 4];
-    match info.color_type {
-        png::ColorType::Rgba => rgba.copy_from_slice(src),
-        png::ColorType::Rgb => {
-            for i in 0..n {
-                rgba[i * 4..i * 4 + 3].copy_from_slice(&src[i * 3..i * 3 + 3]);
-            }
-        }
-        png::ColorType::Grayscale => {
-            for i in 0..n {
-                rgba[i * 4..i * 4 + 3].fill(src[i]);
-            }
-        }
-        png::ColorType::GrayscaleAlpha => {
-            for i in 0..n {
-                rgba[i * 4..i * 4 + 3].fill(src[i * 2]);
-                rgba[i * 4 + 3] = src[i * 2 + 1];
-            }
-        }
-        png::ColorType::Indexed => return None,
-    }
-    Some((rgba, info.width, info.height))
+    crate::device_art::decode_png_bytes(png)
 }
 
 #[cfg(test)]
