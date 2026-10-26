@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyFill, autoFill, available, fillCounts, fillText, wears } from './label-choice.js';
+import { applyFill, autoFill, available, fillCounts, fillText, wears, uploadKind } from './label-choice.js';
 
 const LOGO = new Uint8Array([1]);
 const LABEL = new Uint8Array([2]);
@@ -99,4 +99,17 @@ test('the fill is only asked when both styles have art somewhere', () => {
   assert.equal(autoFill({ unlabelled: 3, real: 0, logo: 3, neither: 0 }), 'logo');
   assert.equal(autoFill({ unlabelled: 3, real: 3, logo: 0, neither: 0 }), 'real');
   assert.equal(autoFill({ unlabelled: 1, real: 0, logo: 0, neither: 1 }), 'logo');
+});
+
+test('missing label or logo choices open the corresponding local PNG picker', () => {
+  assert.equal(uploadKind(cart({ hasReal:false }), 'real'), 'customLabel');
+  assert.equal(uploadKind(cart({ hasLogo:false }), 'logo'), 'customLogo');
+  assert.equal(uploadKind(cart(), 'real'), null);
+  assert.equal(uploadKind(cart(), 'logo'), null);
+  assert.equal(uploadKind(cart(), 'card'), null);
+});
+
+test('an explicit single-cart style does not silently substitute the other style', () => {
+  assert.deepEqual(wears(cart({ choice:'logo', byHand:true, hasLogo:false, hasReal:true })), { kind:'none', why:'nothing' });
+  assert.deepEqual(wears(cart({ choice:'real', byHand:true, hasReal:false, hasLogo:true })), { kind:'none', why:'nothing' });
 });

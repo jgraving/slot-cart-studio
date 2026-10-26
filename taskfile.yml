@@ -8,7 +8,12 @@ vars:
   # cart_shell.rs, which the shell choice is read and merged through.
   FACE_PATHS: >-
     crates/slot-ui/src/cart.rs crates/slot-ui/src/shell.rs crates/slot-ui/src/silhouette.rs
-    crates/slot-ui/src/text.rs crates/slot-ui/src/art.rs crates/slot-ui/assets/cart.svg
+    crates/slot-ui/src/text.rs crates/slot-ui/src/art.rs crates/slot-ui/src/bitmaps.rs
+    crates/slot-ui/src/material.rs crates/slot-ui/src/label_mask.rs crates/slot-ui/src/label_fit.rs
+    assets/gba_neutral.png assets/gba_clear.png assets/gb_neutral.png assets/gbc_neutral.png
+    assets/gbc_clear.png assets/gba_interior.png assets/gb_interior.png assets/gbc_interior.png
+    assets/board.png assets/gb_board.png crates/slot-ui/assets/fonts
+    crates/slot-ui/src/art.rs crates/slot-ui/assets/cart.svg
     crates/slot-ui/assets/cart_detail.svg crates/slot-ui/assets/gb_cart.svg
     crates/slot-ui/assets/gb_cart_detail.svg crates/slot-ui/assets/gbc_cart.svg
     crates/slot-ui/assets/gbc_cart_detail.svg crates/slot-ui/assets/lettering_gb.png

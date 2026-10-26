@@ -53,7 +53,12 @@ fn slot_face(root: &Path) -> (Vec<u8>, String, String) {
     cart.read_header();
     let cart = &cart;
     (
-        slot_ui::cart_face(cart).rgba,
+        if slot_ui::shows_interior(cart) {
+            let interior = slot_ui::cart_interior(cart).rgba;
+            let board = slot_ui::cart_backing(slot_ui::gb_shell_of(cart)).rgba;
+            let front = slot_ui::cart_face(cart).rgba;
+            face::composite_layers(&[&interior, &board, &front])
+        } else { slot_ui::cart_face(cart).rgba },
         cart.code.clone(),
         cart.stem.clone(),
     )
@@ -236,5 +241,31 @@ fn the_game_code_is_read_the_way_slot_reads_it() {
             slot_code,
             "{code:?}"
         );
+    }
+}
+
+#[test]
+fn scanner_corners_match_the_device_without_destroying_printed_ink() {
+    for background in [0, 255] {
+        let png = png_rgba(256, 128, |x, y| {
+            let dx = x.min(255-x) as f64 + 0.5;
+            let dy = y.min(127-y) as f64 + 0.5;
+            if dx < 24. && dy < 24. && (24.-dx).powi(2)+(24.-dy).powi(2)>576. {
+                [background, background, background, 255]
+            } else if (100..120).contains(&x) && (40..60).contains(&y) {
+                [0, 0, 0, 255]
+            } else { [190, 80, 40, 255] }
+        });
+        assert_same_as_slot(&png);
+        let label = slot_cart_studio::label::Label::full(&png, face::platform_of("GBA")).unwrap();
+        let output = label.png();
+        let mut reader = png::Decoder::new(output.as_slice()).read_info().unwrap();
+        assert_eq!(reader.info().color_type, png::ColorType::Rgba);
+        let mut px = vec![0; reader.output_buffer_size()];
+        let info = reader.next_frame(&mut px).unwrap();
+        assert_eq!(px[3], 0, "scan corner should reveal plastic");
+        let centre = ((info.height/2 * info.width + info.width/2)*4) as usize;
+        assert_eq!(px[centre+3], 255, "interior artwork must remain opaque");
+        assert_same_as_slot(&output);
     }
 }

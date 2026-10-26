@@ -320,18 +320,12 @@ impl Label {
     }
 
     /// A whole label, cropped to fill the platform's label as slot's cover would, so nothing of
-    /// it is shrunk. Transparent pixels go over black, as the opaque PNG written for it has them.
+    /// it is shrunk. Eligible scanner borders are cleared before alpha-aware resizing.
     pub fn full(png: &[u8], platform: Platform) -> Option<Label> {
-        let (art, w, h) = art::decode(png)?;
+        let (mut art, w, h) = art::decode(png)?;
+        crate::label_mask::clear_corner_background(&mut art, w, h);
         let (lw, lh) = size(platform);
-        let mut rgba = art::cover_rgba(&art, w, h, lw, lh)?;
-        for p in rgba.chunks_exact_mut(4) {
-            let a = p[3] as u32;
-            for c in &mut p[..3] {
-                *c = ((*c as u32 * a + 127) / 255) as u8;
-            }
-            p[3] = 255;
-        }
+        let rgba = art::cover_rgba(&art, w, h, lw, lh)?;
         Some(Label {
             logo: None,
             lw,
@@ -377,21 +371,20 @@ impl Label {
         )
     }
 
-    /// Opaque 8-bit RGB, which is all a card's label needs.
+    /// Keep transparent scan corners in RGBA; opaque compositions retain compact RGB.
     pub fn png(&self) -> Vec<u8> {
-        let rgb: Vec<u8> = self
-            .rgba
-            .chunks_exact(4)
-            .flat_map(|p| [p[0], p[1], p[2]])
-            .collect();
+        let alpha = self.rgba.chunks_exact(4).any(|p| p[3] != 255);
+        let pixels: Vec<u8> = if alpha { self.rgba.clone() } else {
+            self.rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect()
+        };
         let mut out = Vec::new();
         {
             let mut enc = png::Encoder::new(&mut out, self.lw, self.lh);
-            enc.set_color(png::ColorType::Rgb);
+            enc.set_color(if alpha { png::ColorType::Rgba } else { png::ColorType::Rgb });
             enc.set_depth(png::BitDepth::Eight);
             enc.write_header()
                 .expect("a PNG header writes into a Vec")
-                .write_image_data(&rgb)
+                .write_image_data(&pixels)
                 .expect("PNG data writes into a Vec");
         }
         out

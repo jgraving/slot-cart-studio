@@ -446,6 +446,7 @@ dependencies = [
  "fontdue",
  "png 0.17.16",
  "resvg",
+ "slot-gfx-shim",
  "slot-store-shim",
  "slot-ui",
  "tempfile",
@@ -463,6 +464,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "slot-gfx-shim"
+version = "0.1.0"
+
+[[package]]
 name = "slot-power"
 version = "0.1.0"
 
@@ -470,6 +475,7 @@ version = "0.1.0"
 name = "slot-store"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "unicode-normalization",
 ]
 
