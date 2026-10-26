@@ -7,7 +7,7 @@ Find artwork for your games, design cartridge labels and choose colors and finis
 - **Real labels or logos.** Look up existing artwork, or bring your own PNG.
 - **Your colors.** Adjust the label background, cartridge color and finish.
 - **Save your way.** Chrome and Edge can write to the SD card. Folder import also lets you export a ZIP.
-- **Local game files.** Games are read in the browser; artwork is downloaded from the configured sources.
+- **Runs on your device.** This is a static website: game files, labels and edits stay on your device. Studio never uploads your files or stores them on a server. Game databases and artwork are downloaded as needed.
 
 Choose the top folder of your card—the one containing `Games` and `Labels`. Make your changes, save, safely eject the card and restart slot.sp to load the artwork.
 

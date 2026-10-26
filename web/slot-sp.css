@@ -7,6 +7,7 @@ body{font-family:"Google Sans Flex",sans-serif;font-optical-sizing:auto;font-var
 .wrap{padding-top:56px;min-height:calc(100vh - 60px)}
 .title{font-size:40px;font-weight:680;font-variation-settings:"ROND" 45;letter-spacing:-.035em}
 .studio-intro{color:var(--muted);font-size:17px;line-height:1.65;margin:22px auto;max-width:620px}
+.studio-privacy{color:var(--muted);font-size:16px;line-height:1.65;margin:20px auto;max-width:660px}
 .studio-note{color:var(--muted);font-size:14px;line-height:1.7;margin:18px auto 0;max-width:560px}.studio-note a{color:var(--teal);text-underline-offset:3px}
 #startup{font-size:14px;color:var(--teal);margin-top:24px}
 .btn{border-radius:5px;background:var(--teal);border-color:var(--teal);color:#112126;font-weight:650}
@@ -17,4 +18,4 @@ body{font-family:"Google Sans Flex",sans-serif;font-optical-sizing:auto;font-var
 .credits{margin-top:48px;font-size:13px}
 .editor{background:#171d26}
 button:focus-visible,label.btn:focus-within,a:focus-visible{outline-color:var(--teal)}
-@media(max-width:520px){.wrap{padding:36px 20px}.studio-intro{font-size:17px}.intro .actions{flex-direction:column}.intro .btn{width:100%}.studio-note{font-size:12px}}
+@media(max-width:520px){.wrap{padding:36px 20px}.studio-intro{font-size:17px}.intro .actions{flex-direction:column}.intro .btn{width:100%}.studio-note{font-size:14px}}
