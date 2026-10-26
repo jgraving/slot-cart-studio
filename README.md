@@ -24,6 +24,8 @@ wasm-pack build --release --target web --no-typescript --out-dir web/pkg
 cp LICENSE web/LICENSE
 ```
 
+Logo lookup uses the CORS-enabled libretro sources by default. An optional scanned-label collection can be selected with `?art=https://your-art-host/`; that host must allow the Studio origin through CORS.
+
 The web theme uses the self-hosted Google Sans Flex from the slot.sp website. See the renderer's font licenses for its preview text.
 
 ## Credits & license

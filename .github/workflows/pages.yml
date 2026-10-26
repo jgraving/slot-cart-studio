@@ -28,6 +28,9 @@ jobs:
           repository: BrandonKowalski/slot
           ref: ${{ steps.pin.outputs.ref }}
           path: slot
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
       - name: Install Rust and WebAssembly target
         run: rustup toolchain install 1.96 --profile minimal --target wasm32-unknown-unknown
       - name: Check JavaScript and card handling
