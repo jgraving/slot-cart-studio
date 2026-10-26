@@ -1091,7 +1091,7 @@ async function start() {
       artIndex = await fetchIndex(ART_BASE);
       console.info(`art set: ${Object.keys(artIndex).length} checksums from ${ART_BASE}`);
     } catch (e) {
-      banner(`The art set at ${ART_BASE} didn’t load (${e.message}), so carts get slot’s own labels.`);
+      banner(`The art set at ${ART_BASE} didn’t load (${e.message}), you can still upload label or logo PNGs.`);
     }
   }
   const direct = 'showDirectoryPicker' in window;
