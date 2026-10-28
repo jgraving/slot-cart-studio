@@ -25,3 +25,12 @@ button:focus-visible,label.btn:focus-within,a:focus-visible{outline-color:var(--
 .privacy-box p{margin:7px 0 0;color:#e6f6f3;font-size:15px;line-height:1.65}
 .privacy-box .privacy-detail{color:#b8d4d2;font-size:14px}
 @media(max-width:520px){.privacy-box{padding:16px;gap:12px}}
+
+.bulk-panel{margin:20px 0 28px;padding:22px;background:var(--housing);border:1px solid var(--rule);border-radius:12px;text-align:left}
+.bulk-heading,.bulk-fields{display:flex;align-items:center;flex-wrap:wrap;gap:12px}.bulk-heading strong{margin-right:auto;color:var(--teal)}
+.bulk-panel p{color:var(--muted);font-size:14px;line-height:1.6}.bulk-fields label{display:flex;align-items:center;gap:10px;font-size:14px}
+.bulk-fields select{font:inherit;color:var(--ink);background:var(--recess);border:1px solid var(--edge);border-radius:5px;padding:10px}.bulk-fields input[type=color]{width:48px;height:40px;border:1px solid var(--edge);background:var(--recess);padding:3px}
+.cart.selectable{position:relative;border-radius:12px;outline:1px solid var(--rule);outline-offset:6px}.cart.selectable::after{content:'＋';position:absolute;right:4px;top:4px;width:28px;height:28px;display:grid;place-items:center;border-radius:50%;background:var(--recess);color:var(--muted);border:1px solid var(--edge)}
+.cart.selectable.selected{outline:2px solid var(--teal);background:#192e32}.cart.selectable.selected::after{content:'✓';background:var(--teal);color:#112126;border-color:var(--teal)}
+.cart.selectable:focus-visible{outline:3px solid var(--purple)}
+@media(max-width:520px){.bulk-panel{padding:16px}.bulk-fields{align-items:stretch}.bulk-fields label{justify-content:space-between;width:100%}.bulk-fields .btn{width:100%}}

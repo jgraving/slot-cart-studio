@@ -37,3 +37,7 @@ Adapted by Jake Graving from **[Cart Studio by Brandon T. Kowalski](https://gith
 Game names and CRCs: [libretro-database](https://github.com/libretro/libretro-database), CC BY-SA 4.0. Logos: [ScreenScraper](https://www.screenscraper.fr/), CC BY-NC-SA 4.0. Original artwork credits remain in the app.
 
 Game Boy is a trademark of Nintendo. This project is not affiliated with Nintendo.
+
+### Style several cartridges
+
+Choose **Select carts**, pick any cartridges (across system tabs if needed), then choose a shell color, finish, or both. **Select this system** selects the current tab. **Apply to selected** preserves each cartridge's outline and label, and each cart's editor can undo its change. Write to card or export the ZIP when ready.
