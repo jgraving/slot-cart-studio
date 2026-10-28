@@ -50,12 +50,26 @@
 
   <div class="shelf-bar">
     <nav class="shelf-tabs" id="tabs" aria-label="Platforms" hidden></nav>
+    <button class="key dark" id="bulk-open" type="button" aria-pressed="false" hidden>Select carts</button>
     <button class="key dark fill-open" id="fill-open" type="button" hidden>Fill unlabelled carts…</button>
     <div class="write-bar" id="write-bar" hidden>
       <span class="eject" id="eject" role="status" hidden>Eject the card before you take it out, or slot may not find your games.</span>
       <button class="btn" id="write" type="button" disabled>Write to card</button>
     </div>
   </div>
+
+  <section id="bulk-panel" class="bulk-panel" aria-label="Style selected carts" hidden>
+    <div class="bulk-heading"><strong id="bulk-count" aria-live="polite">0 carts selected</strong><button class="key dark" id="bulk-all" type="button">Select this system</button><button class="key dark" id="bulk-clear" type="button">Clear selection</button></div>
+    <p>Choose carts, then change their shells together. Labels and cartridge shapes stay as they are.</p>
+    <div class="bulk-fields">
+      <label>Color <select id="bulk-colour-mode"><option value="keep">Keep existing</option><option value="custom">Choose color</option></select></label>
+      <input id="bulk-colour" type="color" value="#6a3fa0" aria-label="Shell color" hidden>
+      <label>Finish <select id="bulk-finish"><option value="">Keep existing</option><option value="solid">Solid</option><option value="clear">Clear</option><option value="glitter">Glitter</option></select></label>
+      <button class="btn" id="bulk-apply" type="button" disabled>Apply to selected</button>
+      <button class="key dark" id="bulk-done" type="button">Done</button>
+    </div>
+    <p id="bulk-status" role="status">Changes stay in Studio until you write to the card or export.</p>
+  </section>
 
   <section class="grid" id="grid" aria-label="Carts"></section>
 

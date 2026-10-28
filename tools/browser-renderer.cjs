@@ -43,7 +43,38 @@ const server = http.createServer((req,res) => {
   const downloaded=page.waitForEvent('download');
   await page.locator('#write').click();
   await (await downloaded).saveAs(path.join(fixtures,'labels.zip'));
+  // Bulk selection spans system tabs, preserves labels, and writes only chosen shells.
+  const card = path.join(fixtures, 'card');
+  for (const [platform, name, extension] of [['GBA','Style Second','gba'],['GB','Style GB','gb']]) {
+   fs.mkdirSync(path.join(card,'Games',platform),{recursive:true});
+   fs.mkdirSync(path.join(card,'Labels',platform),{recursive:true});
+   fs.writeFileSync(path.join(card,'Games',platform,`${name}.${extension}`),Buffer.alloc(512));
+   fs.copyFileSync(path.join(fixtures,`${platform}-scan.png`),path.join(card,'Labels',platform,`${name}.png`));
+  }
+  await page.locator('#pick-files').setInputFiles(card);
+  await page.locator('.cart[data-state="has-label"]').nth(2).waitFor({state:'attached'});
+  await page.locator('#bulk-open').click();
+  await page.getByRole('button',{name:'Select Renderer Probe',exact:true}).click();
+  await page.locator('#tabs button').last().click();
+  await page.getByRole('button',{name:'Select Style GB',exact:true}).focus();
+  await page.keyboard.press('Space');
+  await page.locator('#bulk-colour-mode').selectOption('custom');
+  await page.locator('#bulk-colour').fill('#123456');
+  await page.locator('#bulk-finish').selectOption('clear');
+  await page.locator('#bulk-apply').click();
+  if(!(await page.locator('#bulk-status').textContent()).startsWith('Updated 2 carts'))throw Error('Bulk selection did not span tabs');
+  await page.screenshot({path:path.join(fixtures,'studio-bulk.png'),fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  await page.screenshot({path:path.join(fixtures,'studio-bulk-mobile.png'),fullPage:true});
+  if(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth))throw Error('Bulk controls overflow mobile viewport');
+  await page.locator('#bulk-done').click();
+  const bulkDownload=page.waitForEvent('download');
+  await page.locator('#write').click();
+  const bulkPath=path.join(fixtures,'bulk-labels.zip');
+  await (await bulkDownload).saveAs(bulkPath);
+  const bulk=fs.readFileSync(bulkPath).toString('latin1');
+  if(!bulk.includes('Renderer Probe = auto 123456 clear')||!bulk.includes('Style GB = auto 123456 clear')||bulk.includes('Style Second ='))throw Error('Bulk export changed the wrong carts or missed selected shells');
   if(errors.length)throw Error(errors.join('\n'));
-  console.log('PASS: logo fallback, explicit selection, missing-label picker, native preview and ZIP export');
+  console.log('PASS: artwork choices, native previews, bulk selection across tabs, mobile layout and ZIP exports');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});

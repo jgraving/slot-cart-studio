@@ -26,6 +26,7 @@ import init, {
 } from './pkg/slot_cart_studio.js';
 import { fromDirectory, fromFiles, labelKey, PLATFORMS } from './card.js';
 import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.js';
+import { applyBulkStyle } from './bulk-style.js';
 import { createEditor } from './editor.js';
 import { amend, commit } from './history.js';
 import { smallPrint } from './smallprint.js';
@@ -50,6 +51,8 @@ const dats = new Map();
 let session = null;
 let busy = 0;
 let writing = false;
+let selecting = false;
+const selectedCarts = new Set();
 // Set by the first WASM trap. What the module holds is undefined after one (a RefCell can stay
 // borrowed, and then every face panics), so nothing calls into it again.
 let fatal = false;
@@ -286,11 +289,11 @@ function buildCard(c) {
     .map((tag) => tag.trim())
     .filter(Boolean);
   root.setAttribute('aria-label', `Edit ${clean_label(c.stem)}`);
-  root.addEventListener('click', () => editor.open(c));
+  root.addEventListener('click', () => activateCart(c));
   root.addEventListener('keydown', (e) => {
     if (e.target !== root || (e.key !== 'Enter' && e.key !== ' ')) return;
     e.preventDefault();
-    editor.open(c);
+    activateCart(c);
   });
   // Always taken, so a file dropped on a cart that can't use it doesn't navigate the page away.
   c.el.face.addEventListener('dragover', (e) => {
@@ -352,6 +355,7 @@ function paint(c) {
   // The game code is read with the ROM, after the card is built.
   c.el.print.textContent = smallPrint(c.platform, c.code, c.tags);
   updateWriteBar();
+  updateBulk(false);
   updateFillButton();
   if (editor.current() === c) editor.refresh();
 }
@@ -513,6 +517,8 @@ async function open(source) {
     return;
   }
   editor.close();
+  selecting = false;
+  selectedCarts.clear();
   loading(null);
   session = { source, carts: source.carts.map(newCart) };
   $('banner').hidden = true;
@@ -738,6 +744,56 @@ function showPlatform(p) {
   session.platform = p;
   for (const c of session.carts) c.el.root.hidden = c.platform !== p;
   renderTabs();
+  updateBulk();
+}
+
+function activateCart(c) {
+  if (!selecting) return editor.open(c);
+  if (selectedCarts.has(c)) selectedCarts.delete(c); else selectedCarts.add(c);
+  updateBulk();
+}
+
+function setSelecting(on) {
+  editor.close();
+  selecting = on;
+  if (!on) selectedCarts.clear();
+  updateBulk();
+}
+
+function updateBulk(refreshCards = true) {
+  if (!session) return;
+  $('bulk-open').hidden = session.carts.length === 0;
+  $('bulk-open').setAttribute('aria-pressed', String(selecting));
+  $('bulk-open').disabled = writing || fatal;
+  $('bulk-panel').hidden = !selecting;
+  $('bulk-count').textContent = `${selectedCarts.size} cart${selectedCarts.size === 1 ? '' : 's'} selected`;
+  const canApply = selectedCarts.size > 0 && ![...selectedCarts].some(c => c.looking || c.error);
+  const hasStyle = $('bulk-colour-mode').value === 'custom' || !!$('bulk-finish').value;
+  $('bulk-apply').disabled = !canApply || !hasStyle || writing || fatal;
+  $('bulk-colour').hidden = $('bulk-colour-mode').value !== 'custom';
+  if (!refreshCards) return;
+  for (const c of session.carts) {
+    c.el.root.classList.toggle('selected', selectedCarts.has(c));
+    c.el.root.classList.toggle('selectable', selecting);
+    c.el.root.setAttribute('aria-label', `${selecting ? 'Select' : 'Edit'} ${clean_label(c.stem)}`);
+    if (selecting) c.el.root.setAttribute('aria-pressed', String(selectedCarts.has(c)));
+    else c.el.root.removeAttribute('aria-pressed');
+  }
+}
+
+function applySelectedStyle() {
+  if (writing || fatal) return;
+  try {
+    if ([...selectedCarts].some(c => !shell_key_ok(c.stem))) throw new Error("Some selected filenames cannot be stored in shell settings. Deselect those carts to continue.");
+    const carts = applyBulkStyle([...selectedCarts], {
+      colour: $('bulk-colour-mode').value === 'custom' ? $('bulk-colour').value : null,
+      finish: $('bulk-finish').value,
+    }, choiceOf);
+    carts.forEach(c => changed(c));
+    $('bulk-status').textContent = carts.length
+      ? `Updated ${carts.length} cart${carts.length === 1 ? '' : 's'}. Write to card or export to save. Each cart’s editor has Undo.`
+      : 'The selected carts already have that style.';
+  } catch (e) { $('bulk-status').textContent = e.message; }
 }
 
 function updateWriteBar() {
@@ -836,6 +892,7 @@ async function writeLabels() {
   const shells = shellChanges();
   if ((!carts.length && !shells.length) || writing || fatal) return;
   writing = true;
+  updateBulk(false);
   $('eject').hidden = true;
   updateWriteBar();
   writeProgress(0, carts.length + shells.length);
@@ -961,6 +1018,7 @@ async function writeLabels() {
     if (!trapped(e)) throw e;
   } finally {
     writing = false;
+    updateBulk(false);
     writeProgress(0, 0);
     updateWriteBar();
   }
@@ -1125,6 +1183,12 @@ async function start() {
       banner(err.message);
     }
   });
+  $('bulk-open').addEventListener('click', () => setSelecting(!selecting));
+  $('bulk-done').addEventListener('click', () => { setSelecting(false); $('bulk-open').focus(); });
+  $('bulk-all').addEventListener('click', () => { session.carts.filter(c => c.platform === session.platform).forEach(c => selectedCarts.add(c)); updateBulk(); });
+  $('bulk-clear').addEventListener('click', () => { selectedCarts.clear(); updateBulk(); });
+  for (const id of ['bulk-colour-mode', 'bulk-colour', 'bulk-finish']) $(id).addEventListener('change', updateBulk);
+  $('bulk-apply').addEventListener('click', applySelectedStyle);
   $('write').addEventListener('click', () => track(writeLabels()));
   $('fill-open').addEventListener('click', () => track(askFill(session)));
   for (const kind of ['real', 'logo']) $(`fill-${kind}`).addEventListener('click', () => answerFill(kind));
