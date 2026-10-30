@@ -13,6 +13,7 @@ import init, {
   cart_size,
   clean_label,
   existing_face,
+  label_boxes,
   fallback_hue,
   header_code,
   label_tags,
@@ -26,12 +27,14 @@ import init, {
 } from './pkg/slot_cart_studio.js';
 import { fromDirectory, fromFiles, labelKey, PLATFORMS } from './card.js';
 import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.js';
-import { applyBulkStyle } from './bulk-style.js';
+import { applyBulkStyle, applyBulkArtwork } from './bulk-style.js';
 import { createEditor } from './editor.js';
 import { amend, commit } from './history.js';
 import { smallPrint } from './smallprint.js';
 import { hasLog, logError, logText } from './log.js';
 import { applyFill, autoFill, available, fillCounts, fillText, wears } from './label-choice.js';
+import { extrasFrom } from './extras.js';
+import { heroPicks, heroShell } from './hero.js';
 
 const $ = (id) => document.getElementById(id);
 const limit = limiter(4);
@@ -78,6 +81,7 @@ function newCart({ platform, stem, file }) {
     existingPng: null,
     crc: null,
     game: null,
+    guessed: false,
     // Logos stay PNG bytes, which are small. The label made from one is not kept: see withLabel.
     logoBytes: null,
     // The real label's ground and band, measured from its scan: sure looks only.
@@ -147,10 +151,12 @@ const baseDeep = (c) => lookOf(c)?.ground ?? Array.from(stopsOf(c)).slice(0, 3);
 const hex = (rgb) => `#${[...rgb].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 // A checksum as the set names its files: eight upper case hex digits.
 const crcHex = (crc) => crc.toString(16).toUpperCase().padStart(8, '0');
-// Optional scanned-label collection. Its host must allow this site's origin through CORS.
-// The default uses libretro logos; custom label PNGs are always available.
-const ART_BASE = new URLSearchParams(location.search).get('art') ?? '';
+// The published checksum catalog includes scanned labels and logos. ?art= remains
+// available for another CORS-enabled collection (or an empty value to opt out).
+const ART_BASE = new URLSearchParams(location.search).get('art') ?? 'https://art.slot-cfw.fyi/';
 let artIndex = null;
+let ready = null;
+let extras = extrasFrom(null);
 const fromHex = (value) => [1, 3, 5].map((at) => parseInt(value.slice(at, at + 2), 16));
 // A sure look from the art set, or null: anything missing, unsure or malformed counts as no look.
 const rgbOf = (h) => (typeof h === 'string' && /^[0-9a-f]{6}$/i.test(h) ? fromHex(`#${h}`) : null);
@@ -249,7 +255,7 @@ function trapped(e) {
   if (!(e instanceof WebAssembly.RuntimeError)) return false;
   if (!fatal) {
     fatal = true;
-    loading(null);
+    loading(false);
     logError('trap', e);
     $('progress').hidden = true;
     banner(FATAL);
@@ -269,13 +275,14 @@ function describe(c, state) {
   if (state === 'looking' && !c.looking) return 'Loading the real label…';
   if (state === 'looking') return c.crc === null ? 'Reading the ROM…' : 'Looking it up…';
   if (state === 'unfilled') return '';
+  if (c.guessed && c.game && !c.rejected) return `Matched by name to ${c.game}`;
   return '';
 }
 
 function buildCard(c) {
   const root = $('card-tpl').content.firstElementChild.cloneNode(true);
   const q = (selector) => root.querySelector(selector);
-  c.el = { root, canvas: q('canvas'), face: q('.face'), stem: q('.stem'), print: q('.print'), game: q('.game') };
+  c.el = { root, canvas: q('canvas'), face: q('.face'), stem: q('.stem'), game: q('.game') };
   const [boxW, boxH] = boxOf(c.platform);
   c.el.canvas.width = boxW;
   c.el.canvas.height = boxH;
@@ -330,6 +337,38 @@ function faceOf(c, state) {
   return null;
 }
 
+function withFullLabel(bytes, platform, use) {
+  const label = Label.full(bytes, platform);
+  try {
+    return use(label);
+  } finally {
+    label.free();
+  }
+}
+
+async function showHero() {
+  const presets = new Map(Array.from(shell_presets(), (line) => line.split('\t')));
+  for (const pick of heroPicks(artIndex)) {
+    const bytes = await fetchArt(ART_BASE, pick.label).catch(() => null);
+    if (fatal || session) return;
+    if (!bytes) continue;
+    const canvas = document.querySelector(`.trio [data-platform=${pick.platform}]`);
+    const [w, h] = boxOf(pick.platform);
+    try {
+      withFullLabel(bytes, pick.platform, (label) => {
+        const face = label.face(pick.platform, '', new Uint8Array(0), heroShell(pick.platform, pick.preset, presets), '');
+        canvas.width = w;
+        canvas.height = h;
+        drawFace(canvas, face, pick.platform);
+      });
+    } catch (e) {
+      if (trapped(e)) return;
+      continue;
+    }
+    requestAnimationFrame(() => canvas.classList.add('in'));
+  }
+}
+
 function drawFace(canvas, face, platform) {
   const pixels = new Uint8ClampedArray(face.buffer, face.byteOffset, face.byteLength);
   const [boxW, boxH] = boxOf(platform);
@@ -352,8 +391,6 @@ function paint(c) {
   canvas.hidden = !face;
   if (face) drawFace(canvas, face, c.platform);
   game.textContent = describe(c, state);
-  // The game code is read with the ROM, after the card is built.
-  c.el.print.textContent = smallPrint(c.platform, c.code, c.tags);
   updateWriteBar();
   updateBulk(false);
   updateFillButton();
@@ -365,6 +402,8 @@ function paint(c) {
 function chooseGame(c, name) {
   if (c.game === name && !c.rejected) return;
   c.game = name;
+  c.guessed = false;
+  c.match = 'hand';
   c.rejected = false;
   c.logoBytes = null;
   c.looking = true;
@@ -470,14 +509,42 @@ async function takeLogo(c, file) {
   if (bytes && commit(c, () => useCustomLogo(c, bytes))) changed(c);
 }
 
-function loading(text) {
-  document.body.classList.toggle('loading', !!text);
-  $('loader').hidden = !text;
-  if (text) $('loader-text').textContent = text;
+const FILL_MS = 2600;
+const HOLD_MS = 450;
+const meter = { start: 0, target: 0, frame: 0 };
+const shown = () => Math.min(meter.target, (performance.now() - meter.start) / FILL_MS);
+
+function drawMeter() {
+  const f = shown();
+  $('meter-fill').style.width = `${(f * 100).toFixed(1)}%`;
+  $('loader-text').textContent = f < 0.6 ? 'Reading your SD card…' : 'Finding your games…';
+  meter.frame = document.body.classList.contains('loading') ? requestAnimationFrame(drawMeter) : 0;
+}
+
+function loading(on, fraction) {
+  document.body.classList.toggle('loading', on);
+  $('loader').hidden = !on;
+  if (!on) return;
+  if (fraction === 0) Object.assign(meter, { start: performance.now(), target: 0 });
+  if (fraction != null) meter.target = Math.max(meter.target, fraction);
+  if (!meter.frame) meter.frame = requestAnimationFrame(drawMeter);
+}
+
+const READ_SHARE = 0.8;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function loaded(s) {
+  loading(true, 1);
+  await sleep(Math.max(0, meter.start + FILL_MS - performance.now()) + HOLD_MS);
+  if (s !== session) return;
+  loading(false);
+  $('hero').classList.add('opened');
+  document.body.classList.add('card-open');
+  $('how-shelf').hidden = false;
 }
 
 function progress(done, total, stem, verb = 'Reading') {
-  if (document.body.classList.contains('loading') && stem) loading(`${verb} ${done + 1} of ${total}: ${stem}`);
+  if (document.body.classList.contains('loading') && stem) loading(true, (done / total) * READ_SHARE);
   $('progress').hidden = done >= total;
   $('bar').max = total;
   $('bar').value = done;
@@ -519,7 +586,8 @@ async function open(source) {
   editor.close();
   selecting = false;
   selectedCarts.clear();
-  loading(null);
+  bulkArtworkRevision++;
+  loading(false);
   session = { source, carts: source.carts.map(newCart) };
   $('banner').hidden = true;
   $('eject').hidden = true;
@@ -530,17 +598,13 @@ async function open(source) {
   $('grid').replaceChildren(...session.carts.map(buildCard));
   session.carts.forEach(paint);
   showPlatform(platformsOf(session)[0] ?? PLATFORMS[0]);
-  // The card is chosen, so the chooser goes: the write bar sits in its place, once there is
-  // something to write. updateWriteBar, reached through paint, is what shows it.
-  $('pick').hidden = true;
-  $('pick-files-label').hidden = true;
   $('write-bar').hidden = true;
   $('fill-open').hidden = true;
   if (session.carts.length === 0) {
     banner('There are no .gba files in that card’s Games folder.');
     return;
   }
-  loading('Reading the card…');
+  loading(true, 0);
   track(identify(session));
 }
 
@@ -610,9 +674,11 @@ async function identify(s) {
   // A card opened during the last read has its own bar up by now.
   if (s !== session) return;
   progress(total, total, '');
-  loading('Looking up the games…');
+  loading(true, 0.95);
   await match(s);
-  if (s === session) loading(null);
+  if (s !== session) return;
+  await loaded(s);
+  await fill(s);
 }
 
 async function match(s) {
@@ -627,7 +693,7 @@ async function match(s) {
       s.datFailed = true;
       banner(
         `The ${platform} database didn’t load (${e.message}), so carts can’t be matched yet. Logos can still be dropped in by hand.`,
-        () => track(match(s)),
+        () => track(match(s).then(() => fill(s))),
       );
       for (const c of s.carts) {
         if (c.looking) {
@@ -645,6 +711,9 @@ async function match(s) {
   }
   const pending = s.carts.filter((c) => c.crc !== null && !c.game && !c.existing && !c.error);
   await Promise.all(pending.map((c) => art(s, c)));
+}
+
+async function fill(s) {
   if (s === session && !fatal && s.fill == null) await fillOrAsk(s);
 }
 
@@ -652,7 +721,7 @@ async function art(s, c) {
   c.looking = true;
   paint(c);
   try {
-    c.game = dats.get(c.platform)?.game_for(c.crc) ?? null;
+    nameGame(c);
     await dress(s, c);
   } catch (e) {
     if (trapped(e)) return;
@@ -665,10 +734,36 @@ async function art(s, c) {
 // Where the set files this cart's art: under its own checksum while its game is the one that
 // checksum names, else under the first dump of the game chosen for it that the set has.
 function artKey(c) {
+  const extra = c.game && extras.named(c.platform, c.game);
+  if (extra) return extra.slug;
   const own = c.crc === null ? null : crcHex(c.crc);
   const db = dats.get(c.platform);
   if (!c.game || !db || (c.crc !== null && db.game_for(c.crc) === c.game)) return own;
   return Array.from(db.crcs_for(c.game), crcHex).find((k) => artIndex?.[k]) ?? null;
+}
+
+function nameGame(c) {
+  const own = crcHex(c.crc);
+  const named = dats.get(c.platform)?.game_for(c.crc);
+  const dumped = named || artIndex?.[own] ? null : extras.dumped(c.platform, own);
+  const guessed = named || artIndex?.[own] || dumped ? null : extras.guess(c.platform, clean_label(c.stem));
+  c.game = named ?? (dumped ?? guessed)?.name ?? null;
+  c.guessed = !!guessed;
+  c.match = guessed ? 'name' : 'crc';
+}
+
+const MATCHES = { crc: 'By CRC', name: 'By Filename', hand: 'Chosen by hand' };
+
+function infoOf(c) {
+  const code = smallPrint(c.platform, c.code, c.tags) || c.code;
+  const key = artKey(c);
+  return [
+    ['Product Code', code],
+    ['CRC', c.crc === null ? '' : crcHex(c.crc)],
+    ['Game', c.game && !c.rejected ? c.game : 'No match'],
+    ['Matched', c.game && !c.rejected ? MATCHES[c.match] ?? '' : ''],
+    ['Art key', key && artIndex?.[key] ? key : ''],
+  ].filter(([, value]) => value);
 }
 
 // Fetch what `c.game` names and let it decide the cart's hue. The Game row re-runs this for a game
@@ -676,7 +771,7 @@ function artKey(c) {
 async function dress(s, c) {
   // A set of our own is found by checksum, so a cart no database has a name for can still be
   // dressed from it. libretro is found by name, so those requests only happen when there is one.
-  const name = c.game ? thumbnail_name(c.game) : null;
+  const name = c.game && !extras.named(c.platform, c.game) ? thumbnail_name(c.game) : null;
   const key = artKey(c);
   c.look = parseLook(key && artIndex?.[key]?.look);
   // The queue is shared, so a card replaced while its jobs wait gives up their turns without
@@ -756,6 +851,8 @@ function activateCart(c) {
 function setSelecting(on) {
   editor.close();
   selecting = on;
+  bulkArtworkRevision++;
+  bulkColourGesture = null;
   if (!on) selectedCarts.clear();
   updateBulk();
 }
@@ -763,13 +860,14 @@ function setSelecting(on) {
 function updateBulk(refreshCards = true) {
   if (!session) return;
   $('bulk-open').hidden = session.carts.length === 0;
-  $('bulk-open').setAttribute('aria-pressed', String(selecting));
+  $('bulk-open').setAttribute('aria-checked', String(selecting));
+  $('bulk-mode').textContent = selecting ? 'On' : 'Off';
   $('bulk-open').disabled = writing || fatal;
   $('bulk-panel').hidden = !selecting;
   $('bulk-count').textContent = `${selectedCarts.size} cart${selectedCarts.size === 1 ? '' : 's'} selected`;
   const canApply = selectedCarts.size > 0 && ![...selectedCarts].some(c => c.looking || c.error);
-  const hasStyle = $('bulk-colour-mode').value === 'custom' || !!$('bulk-finish').value;
-  $('bulk-apply').disabled = !canApply || !hasStyle || writing || fatal;
+  for (const id of ['bulk-colour-mode', 'bulk-colour', 'bulk-finish']) $(id).disabled = !canApply || writing || fatal;
+  $('bulk-artwork').disabled = !selectedCarts.size || writing || fatal || [...selectedCarts].some(c => c.looking && !bulkLookups.has(c));
   $('bulk-colour').hidden = $('bulk-colour-mode').value !== 'custom';
   if (!refreshCards) return;
   for (const c of session.carts) {
@@ -781,19 +879,66 @@ function updateBulk(refreshCards = true) {
   }
 }
 
-function applySelectedStyle() {
+function applySelectedStyle(group = null) {
   if (writing || fatal) return;
   try {
+    if (!selectedCarts.size) return;
     if ([...selectedCarts].some(c => !shell_key_ok(c.stem))) throw new Error("Some selected filenames cannot be stored in shell settings. Deselect those carts to continue.");
     const carts = applyBulkStyle([...selectedCarts], {
       colour: $('bulk-colour-mode').value === 'custom' ? $('bulk-colour').value : null,
       finish: $('bulk-finish').value,
-    }, choiceOf);
-    carts.forEach(c => changed(c));
+    }, choiceOf, group);
+    carts.forEach(c => changed(c, !!group));
     $('bulk-status').textContent = carts.length
       ? `Updated ${carts.length} cart${carts.length === 1 ? '' : 's'}. Write to card or export to save. Each cart’s editor has Undo.`
-      : 'The selected carts already have that style.';
+      : 'The selected carts already have these options.';
   } catch (e) { $('bulk-status').textContent = e.message; }
+}
+
+let bulkArtworkRevision = 0;
+let bulkArtworkPending = 0;
+let bulkColourGesture = null;
+const bulkLookups = new WeakMap();
+async function loadBulkArtwork(s, c, kind) {
+  if (!c.dressed) {
+    if (!bulkLookups.has(c)) {
+      c.looking = true;
+      bulkLookups.set(c, lookUp(s, c).finally(() => bulkLookups.delete(c)));
+    }
+    await bulkLookups.get(c);
+  }
+  if (s !== session || fatal) return false;
+  if (kind === 'real') {
+    retryReal(c);
+    await fetchReal(s, c);
+    return !!realBytesOf(c);
+  }
+  return available(view(c), kind);
+}
+async function applySelectedArtwork() {
+  const revision = ++bulkArtworkRevision;
+  const kind = $('bulk-artwork').value;
+  if (!kind || writing || fatal || !selectedCarts.size) return;
+  const s = session;
+  const current = c => s === session && selecting && !writing && !fatal && revision === bulkArtworkRevision && selectedCarts.has(c);
+  bulkArtworkPending++;
+  updateWriteBar();
+  $('bulk-status').textContent = `Loading ${kind === 'real' ? 'labels' : 'logos'} for selected carts…`;
+  try {
+    const result = await applyBulkArtwork([...selectedCarts], kind, async (c, k) => {
+      const found = await loadBulkArtwork(s, c, k);
+      return found;
+    }, current, c => changed(c));
+    if (s !== session || revision !== bulkArtworkRevision || !selecting) return;
+    $('bulk-status').textContent = `Updated artwork on ${result.changed.length} carts.` +
+      (result.missing.length ? ` ${result.missing.length} have no ${kind === 'real' ? 'label' : 'logo'} available; their artwork was kept.` : '') +
+      ' Write to card or export to save.';
+  } catch (e) {
+    if (s === session && revision === bulkArtworkRevision) $('bulk-status').textContent = e.message;
+  } finally {
+    bulkArtworkPending--;
+    updateWriteBar();
+  }
 }
 
 function updateWriteBar() {
@@ -802,8 +947,8 @@ function updateWriteBar() {
   $('write-bar').hidden = n === 0 && !writing && $('eject').hidden;
   // Nothing to write means no button at all.
   $('write').hidden = n === 0 && !writing;
-  $('write').disabled = n === 0 || writing || fatal;
-  $('write').textContent = session.source.direct ? 'Write to card' : 'Download ZIP';
+  $('write').disabled = n === 0 || writing || fatal || bulkArtworkPending > 0;
+  $('write').textContent = session.source.direct ? 'Write to card' : 'Download labels';
 }
 
 function writeProgress(done, total) {
@@ -876,6 +1021,70 @@ function answerFill(fill) {
     if (needsReal(c)) track(fetchReal(s, c));
   }
   updateFillButton();
+}
+
+const STEPS = {
+  mac: [
+    ['Open labels.zip', 'Double-click it in Downloads. Safari may have done this already, leaving a Labels folder there.'],
+    ['Drag the Labels folder onto your SD card', 'Choose Replace when your Mac asks. The ZIP includes your existing label and shell selections alongside your new ones.'],
+    ['Eject the card', 'Click the eject button beside it in Finder, then put it back in your handheld.'],
+  ],
+  windows: [
+    ['Open labels.zip', 'Right-click it in Downloads and choose Extract All.'],
+    ['Drag the Labels folder onto your SD card', 'It is inside the labels folder Windows made. Choose Replace the files in the destination.'],
+    ['Eject the card', 'Right-click it in File Explorer and choose Eject, then put it back in your handheld.'],
+  ],
+  linux: [
+    ['Extract labels.zip', 'Your file manager can do it from Downloads.'],
+    ['Copy the Labels folder onto your SD card', 'Merge it with the folder already there and replace the files.'],
+    ['Eject the card', 'Unmount it before you take it out, then put it back in your handheld.'],
+  ],
+};
+
+const osOf = (agent) => (/windows/i.test(agent) ? 'windows' : /mac os|macintosh|iphone|ipad/i.test(agent) ? 'mac' : 'linux');
+
+let lastZip = null;
+
+function guideFor(os) {
+  for (const b of $('guide-os').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.os === os));
+  $('guide-steps').replaceChildren(
+    ...STEPS[os].map(([title, detail]) => {
+      const text = document.createElement('div');
+      text.append(
+        Object.assign(document.createElement('b'), { textContent: title }),
+        Object.assign(document.createElement('span'), { textContent: detail }),
+      );
+      const li = document.createElement('li');
+      li.append(text);
+      return li;
+    }),
+  );
+}
+
+function showGuide() {
+  lastZip = null;
+  $('guide-again').disabled = true;
+  guideFor(osOf(navigator.userAgent));
+  if (!$('guide').open) $('guide').showModal();
+}
+
+function showHelp() {
+  if (!$('sizes').children.length) {
+    const [gbaW, gbaH, gbW, gbH, gbcW, gbcH] = label_boxes();
+    const row = (name, w, h, width) => {
+      const tr = document.createElement('tr');
+      for (const text of [name, `${(w / h).toFixed(2)}:1`, `${width}×${Math.round((width * h) / w)}`]) {
+        tr.append(Object.assign(document.createElement('td'), { textContent: text }));
+      }
+      return tr;
+    };
+    $('sizes').replaceChildren(
+      row('GBA', gbaW, gbaH, 1280),
+      row('Game Boy', gbW, gbH, 1024),
+      row('Game Boy Color', gbcW, gbcH, 1024),
+    );
+  }
+  $('help').showModal();
 }
 
 function download(blob, name) {
@@ -956,6 +1165,7 @@ async function writeLabels() {
         if (problems.length) banner(problems.join(' '));
       }
     } else {
+      showGuide();
       const zip = new Zip();
       // Each entry is taken out of WASM memory as soon as it is added, so the card's labels pile
       // up here, where memory is given back, and not in the module.
@@ -1007,7 +1217,9 @@ async function writeLabels() {
         if (fatal || s !== session) return;
       }
       parts.push(zip.finish());
-      download(new Blob(parts, { type: 'application/zip' }), 'labels.zip');
+      lastZip = new Blob(parts, { type: 'application/zip' });
+      $('guide-again').disabled = false;
+      download(lastZip, 'labels.zip');
       const unreadNote =
         unread > 0 &&
         `${unread === 1 ? '1 file' : `${unread} files`} in the card’s Labels folder couldn’t be read and aren’t in the zip. Merge it into the card’s Labels folder rather than replacing it.`;
@@ -1052,7 +1264,7 @@ async function lookUp(s, c) {
     if (c.crc === null) c.crc = await crcOf(await c.file());
     if (!dats.has(c.platform)) dats.set(c.platform, Dat.parse(await fetchDat(c.platform)));
     if (s !== session || fatal) return;
-    c.game = dats.get(c.platform).game_for(c.crc) ?? null;
+    nameGame(c);
     await dress(s, c);
   } catch (e) {
     if (trapped(e)) return;
@@ -1094,6 +1306,7 @@ function changed(c, soon = false) {
 
 const editor = createEditor({
   name: (c) => clean_label(c.stem),
+  info: infoOf,
   box: boxOf,
   draw: drawFace,
   face: (c) => {
@@ -1127,7 +1340,7 @@ const editor = createEditor({
   useCustomLabel,
   ensureTiles,
   canShell: (c) => !c.looking && ['ready', 'has-label', 'needs-logo', 'unfilled'].includes(stateOf(c)) && shell_key_ok(c.stem),
-  search: (c, query) => dats.get(c.platform)?.search(query, 30) ?? null,
+  search: (c, query) => [...extras.search(c.platform, query, 30), ...(dats.get(c.platform)?.search(query, 30) ?? [])],
   chooseGame,
   noMatch,
   readLogo,
@@ -1139,7 +1352,7 @@ const editor = createEditor({
   changed,
 });
 
-async function start() {
+async function load() {
   await init();
   for (const platform of PLATFORMS) faceBox.set(platform, Array.from(cart_size(platform)));
   // A set of our own, if the address named one. Not having it is not a failure: every cart falls
@@ -1147,16 +1360,26 @@ async function start() {
   if (ART_BASE) {
     try {
       artIndex = await fetchIndex(ART_BASE);
+      extras = extrasFrom(artIndex);
       console.info(`art set: ${Object.keys(artIndex).length} checksums from ${ART_BASE}`);
     } catch (e) {
       banner(`The art set at ${ART_BASE} didn’t load (${e.message}), you can still upload label or logo PNGs.`);
     }
   }
+}
+
+async function start() {
+  ready = load();
   const direct = 'showDirectoryPicker' in window;
   $('pick').hidden = !direct;
   $('pick-files-label').hidden = false;
-  $('pick-files-label').classList.toggle('ghost', direct);
   $('pick-files-text').textContent = direct ? 'Open folder for ZIP export' : 'Choose SD Card';
+  $('choose-ask-title').textContent = direct ? 'Let it edit files' : 'Let it read the files';
+  $('choose-ask').textContent = direct
+    ? 'Your browser asks to let the site edit files. Choose Edit files, so Cart Studio can save your labels to the card.'
+    : 'Your browser may ask for permission upload the files. This is a misnomer as nothing is actually uploaded. Cart Studio just retrieves the ROM fingerprints and filenames along with existing art.';
+  $('start').addEventListener('click', () => $('choose').showModal());
+  $('choose-cancel').addEventListener('click', () => $('choose').close());
 
   $('pick').addEventListener('click', async () => {
     let root;
@@ -1166,8 +1389,11 @@ async function start() {
       if (e.name !== 'AbortError') banner(e.message);
       return;
     }
+    $('choose').close();
     try {
-      await open(await fromDirectory(root));
+      const source = await fromDirectory(root);
+      await ready;
+      await open(source);
     } catch (e) {
       banner(e.message);
     }
@@ -1177,7 +1403,9 @@ async function start() {
     // the input, so the files are copied out of it first.
     const files = [...e.target.files];
     e.target.value = '';
+    $('choose').close();
     try {
+      await ready;
       await open(fromFiles(files));
     } catch (err) {
       banner(err.message);
@@ -1187,8 +1415,25 @@ async function start() {
   $('bulk-done').addEventListener('click', () => { setSelecting(false); $('bulk-open').focus(); });
   $('bulk-all').addEventListener('click', () => { session.carts.filter(c => c.platform === session.platform).forEach(c => selectedCarts.add(c)); updateBulk(); });
   $('bulk-clear').addEventListener('click', () => { selectedCarts.clear(); updateBulk(); });
-  for (const id of ['bulk-colour-mode', 'bulk-colour', 'bulk-finish']) $(id).addEventListener('change', updateBulk);
-  $('bulk-apply').addEventListener('click', applySelectedStyle);
+  for (const id of ['bulk-colour-mode', 'bulk-finish']) $(id).addEventListener('change', () => { applySelectedStyle(); updateBulk(); });
+  $('bulk-colour').addEventListener('input', () => { bulkColourGesture ??= {}; applySelectedStyle(bulkColourGesture); });
+  $('bulk-colour').addEventListener('change', () => { applySelectedStyle(bulkColourGesture); bulkColourGesture = null; });
+  $('bulk-artwork').addEventListener('change', () => track(applySelectedArtwork()));
+  for (const id of ['how', 'how-shelf']) {
+    $(id).addEventListener('click', async () => {
+      await ready;
+      showHelp();
+    });
+  }
+  $('help-close').addEventListener('click', () => $('help').close());
+  $('guide-done').addEventListener('click', () => $('guide').close());
+  $('guide-again').addEventListener('click', () => lastZip && download(lastZip, 'labels.zip'));
+  $('guide-os').addEventListener('click', (e) => {
+    const os = e.target.closest('button')?.dataset.os;
+    if (os) guideFor(os);
+  });
+  await ready;
+  track(showHero());
   $('write').addEventListener('click', () => track(writeLabels()));
   $('fill-open').addEventListener('click', () => track(askFill(session)));
   for (const kind of ['real', 'logo']) $(`fill-${kind}`).addEventListener('click', () => answerFill(kind));
@@ -1242,6 +1487,7 @@ async function start() {
   document.body.dataset.ready = 'true';
 }
 
+document.querySelector('.hero .title').title = BUILD === 'dev' ? 'dev' : BUILD.slice(0, 7);
 $('build').append(
   BUILD === 'dev'
     ? 'dev'

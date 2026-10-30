@@ -30,18 +30,20 @@ export function visit(c) {
 
 export const visited = (c) => !!c.history?.visit;
 
-export function commit(c, change) {
+export function commit(c, change, group = null) {
   const before = capture(c);
   change();
   if (same(before, capture(c))) return false;
   const h = log(c);
-  h.undo.push(before);
+  if (!group || h.group !== group) h.undo.push(before);
+  h.group = group;
   h.redo = [];
   return true;
 }
 
 function step(c, from, to) {
   if (c.looking || from.length === 0) return false;
+  log(c).group = null;
   to.push(capture(c));
   Object.assign(c, from.pop());
   return true;
