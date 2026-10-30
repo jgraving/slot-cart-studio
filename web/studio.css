@@ -260,7 +260,7 @@ body.loading #grid,body.loading .shelf-bar,body.loading #progress{display:none}
   background:var(--housing);
   box-shadow:inset 0 1px 0 #34343c,inset 0 -1px 0 #121216,0 1px 2px rgba(0,0,0,.4);
 }
-.cart[data-state="has-label"]{opacity:.72}
+.cart[data-state="has-label"]{opacity:1}
 .cart{cursor:pointer}
 .cart:hover{box-shadow:inset 0 1px 0 #34343c,inset 0 -1px 0 #121216,0 1px 2px rgba(0,0,0,.4),0 0 0 2px var(--rule)}
 .cart:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
@@ -323,7 +323,6 @@ body.editing{padding-right:var(--panel)}
 /* The masthead is the site's, not the shelf's, so it keeps the full width. */
 body.editing .mast{margin-right:calc(-1 * var(--panel))}
 body.editing .cart{cursor:pointer}
-body.editing .cart:not(.current){opacity:.45}
 .cart.current{opacity:1;outline:2px solid var(--shell-accent);outline-offset:2px}
 .editor{
   position:fixed;
@@ -417,3 +416,8 @@ body.editing .cart:not(.current){opacity:.45}
 .tile.has-file .add{display:none}
 
 .loader-detail{color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums;min-height:1.5em;text-align:center}
+
+.match-suggestion{margin:16px 0;padding:16px;border:1px solid var(--shell-accent);border-radius:12px}
+.match-suggestion img{display:block;max-width:100%;max-height:140px;margin:12px auto;object-fit:contain}
+.match-suggestion p{margin:0 0 12px}
+.match-suggestion .key{margin:4px 4px 0 0}

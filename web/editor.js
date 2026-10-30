@@ -158,6 +158,13 @@ export function createEditor(api) {
     const label = api.canLabel(c);
     $('ed-game').disabled = !label;
     $('ed-game').querySelector('span').textContent = api.matched(c) ? c.game : 'Choose a game';
+    const suggestion = api.suggestion(c);
+    $('ed-suggestion').hidden = !suggestion;
+    $('ed-suggestion-name').textContent = suggestion ?? '';
+    const image = api.suggestionImage(c);
+    $('ed-suggestion-image').hidden = !image;
+    if (image) { if ($('ed-suggestion-image').getAttribute('src') !== image) $('ed-suggestion-image').src = image; }
+    else $('ed-suggestion-image').removeAttribute('src');
     renderTiles(c);
 
     const bg = api.background(c);
@@ -243,6 +250,13 @@ export function createEditor(api) {
   }
 
   $('ed-close').addEventListener('click', close);
+
+  $('ed-suggestion-approve').addEventListener('click', () => {
+    const name = cart && api.suggestion(cart);
+    if (name) change(api.approveSuggestion);
+    keepFocus();
+  });
+  $('ed-suggestion-dismiss').addEventListener('click', () => { change(api.dismissSuggestion); keepFocus(); });
 
   $('ed-game').addEventListener('click', () => {
     if (!toggle('ed-games')) return;

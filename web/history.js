@@ -2,6 +2,7 @@
 // back to how the cart was when the editor came to it.
 export const EDITABLE = [
   'game',
+  'suggestion',
   'rejected',
   'choice',
   'byHand',
