@@ -25,6 +25,7 @@ import init, {
   stub_target,
   thumbnail_name,
 } from './pkg/slot_cart_studio.js';
+import { suggestName, titleWords, reviewRank } from './match-review.js';
 import { LoadProgress } from './load-progress.js';
 import { fromDirectory, fromFiles, labelKey, PLATFORMS } from './card.js';
 import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.js';
@@ -96,6 +97,7 @@ function newCart({ platform, stem, file }) {
     crc: null,
     game: null,
     guessed: false,
+    suggestion: null,
     // Logos stay PNG bytes, which are small. The label made from one is not kept: see withLabel.
     logoBytes: null,
     // The real label's ground and band, measured from its scan: sure looks only.
@@ -292,6 +294,7 @@ function describe(c, state) {
   if (state === 'error') return c.error;
   if (state === 'looking' && !c.looking) return 'Loading the real label…';
   if (state === 'looking') return c.crc === null ? 'Reading the ROM…' : 'Looking it up…';
+  if (c.suggestion) return `Suggested: ${c.suggestion} · Review match`;
   if (state === 'unfilled') return '';
   if (c.guessed && c.game && !c.rejected) return `Matched by name to ${c.game}`;
   return '';
@@ -412,6 +415,7 @@ function paint(c) {
   updateWriteBar();
   updateBulk(false);
   updateFillButton();
+  scheduleShelfSort();
   if (editor.current() === c) editor.refresh();
 }
 
@@ -420,6 +424,7 @@ function paint(c) {
 function chooseGame(c, name) {
   if (c.game === name && !c.rejected) return;
   c.game = name;
+  c.suggestion = null;
   c.guessed = false;
   c.match = 'hand';
   c.rejected = false;
@@ -765,6 +770,7 @@ async function match(s) {
   } finally {
     w.matching = false;
     showArtworkProgress(s);
+    if (s === session) scheduleShelfSort();
   }
 }
 
@@ -840,9 +846,17 @@ function nameGame(c) {
   const named = dats.get(c.platform)?.game_for(c.crc);
   const dumped = named || artIndex?.[own] ? null : extras.dumped(c.platform, own);
   const guessed = named || artIndex?.[own] || dumped ? null : extras.guess(c.platform, clean_label(c.stem));
-  c.game = named ?? (dumped ?? guessed)?.name ?? null;
-  c.guessed = !!guessed;
-  c.match = guessed ? 'name' : 'crc';
+  c.game = named ?? dumped?.name ?? null;
+  if (!c.game && !artIndex?.[own] && !c.rejected) {
+    const db = dats.get(c.platform);
+    const title = clean_label(c.stem);
+    const queries = [...new Set(titleWords(title).filter(w => w.length >= 3))].slice(0, 3);
+    const candidates = [...new Set(queries.flatMap(q => db?.search(q, 300) ?? []))]
+      .filter(name => Array.from(db.crcs_for(name), crcHex).some(k => artIndex?.[k]?.['support-texture']));
+    c.suggestion = guessed?.name ?? suggestName(title, candidates);
+  }
+  c.guessed = false;
+  c.match = 'crc';
 }
 
 const MATCHES = { crc: 'By CRC', name: 'By Filename', hand: 'Chosen by hand' };
@@ -908,6 +922,20 @@ const platformsOf = (s) => PLATFORMS.filter((p) => s.carts.some((c) => c.platfor
 // A tab per platform on the card, with what it holds. One platform is no choice at all, so a
 // card of nothing but GBA carts shows no switcher and reads exactly as it did before.
 const PLATFORM_NAMES = { GBA: 'Game Boy Advance', GB: 'Game Boy', GBC: 'Game Boy Color' };
+
+let shelfSortFrame = 0;
+function scheduleShelfSort() {
+  if (!shelfSortFrame) shelfSortFrame = requestAnimationFrame(() => {
+    shelfSortFrame = 0;
+    if (!session || session.artworkWork?.matching || document.body.classList.contains('loading')) return;
+    const ranked = session.carts.map(c => ({c, rank:reviewRank({existingPng:c.existingPng,
+      suggestion:c.suggestion, hasMatchedLabel:!!realPathOf(c) && !realOf(c)?.failed})}))
+      .sort((a,b) => a.rank-b.rank);
+    const grid = $('grid'), focused = document.activeElement;
+    ranked.forEach(({c}, i) => { if (grid.children[i] !== c.el.root) grid.insertBefore(c.el.root, grid.children[i] ?? null); });
+    if (grid.contains(focused) && document.activeElement !== focused) focused.focus({preventScroll:true});
+  });
+}
 
 function renderTabs() {
   const s = session;
@@ -1386,6 +1414,7 @@ function setBackground(c, rgb) {
 
 // A CRC can be right about the bytes and wrong about the game: a ROM renamed to another's name.
 function noMatch(c) {
+  c.suggestion = null;
   c.rejected = true;
   c.userHue = false;
   c.deep = null;
@@ -1442,6 +1471,21 @@ const editor = createEditor({
   canShell: (c) => !c.looking && ['ready', 'has-label', 'needs-logo', 'unfilled'].includes(stateOf(c)) && shell_key_ok(c.stem),
   search: (c, query) => [...extras.search(c.platform, query, 30), ...(dats.get(c.platform)?.search(query, 30) ?? [])],
   chooseGame,
+  approveSuggestion: c => {
+    const name = c.suggestion;
+    if (!name) return;
+    c.choice = 'real'; c.byHand = true;
+    chooseGame(c, name);
+  },
+  suggestion: c => c.suggestion,
+  suggestionImage: c => {
+    if (!c.suggestion) return null;
+    const extra = extras.named(c.platform, c.suggestion);
+    const keys = extra ? [extra.slug] : Array.from(dats.get(c.platform)?.crcs_for(c.suggestion) ?? [], crcHex);
+    const path = keys.map(k => artIndex?.[k]?.['support-texture']).find(Boolean);
+    return path ? new URL(path, ART_BASE).href : null;
+  },
+  dismissSuggestion: c => { c.suggestion = null; },
   noMatch,
   readLogo,
   background: (c) => ({ rgb: c.deep ?? baseDeep(c), auto: !c.userHue }),

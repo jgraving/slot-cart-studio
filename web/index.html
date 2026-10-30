@@ -163,6 +163,13 @@
     <button class="ed-close" id="ed-close" type="button" aria-label="Close"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
   </div>
   <canvas id="ed-face" class="ed-face" aria-label="The cart"></canvas>
+  <section class="match-suggestion" id="ed-suggestion" aria-label="Suggested label match" hidden>
+    <p>Possible match: <strong id="ed-suggestion-name"></strong></p>
+    <img id="ed-suggestion-image" alt="Suggested label preview" hidden>
+    <p>Check the title and label before approving. Your current artwork stays until you approve.</p>
+    <button class="key dark" id="ed-suggestion-approve" type="button">Approve match</button>
+    <button class="key dark" id="ed-suggestion-dismiss" type="button">Not this game</button>
+  </section>
   <div class="props">
     <div class="prop">
       <span class="k">Game</span>

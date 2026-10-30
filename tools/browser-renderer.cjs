@@ -142,6 +142,34 @@ const server = http.createServer((req,res) => {
   if(!(await page.locator('#progress').isVisible()))throw Error('Bulk label download progress is missing');
   await page.waitForFunction(()=>window.__studio.idle() && document.getElementById('progress').hidden);
   if(!(await page.evaluate(()=>window.__studio.states().every(c=>c.wears==='real'))))throw Error('Label download did not finish the fill');
+  // Missing labels sort first, filename guesses require explicit approval, and
+  // editing a cart must leave the other games at full opacity.
+  const review=path.join(fixtures,'review','Games','GBA');
+  fs.mkdirSync(review,{recursive:true});
+  fs.writeFileSync(path.join(review,'AAA Matched.gba'),rom);
+  const patched=Buffer.from(rom);patched[0]=1;
+  fs.writeFileSync(path.join(review,'Renderer Probe (patched).gba'),patched);
+  const unknown=Buffer.from(rom);unknown[0]=2;
+  fs.writeFileSync(path.join(review,'ZZZ Unknown.gba'),unknown);
+  await page.locator('#pick-files').setInputFiles(path.join(fixtures,'review'));
+  await page.locator('body.loading').waitFor({state:'hidden'});
+  await page.waitForFunction(()=>window.__studio.idle() && document.getElementById('progress').hidden);
+  if(await page.locator('#fill').isVisible())await page.locator('#fill-logo').click();
+  await page.waitForFunction(()=>document.querySelector('#grid .cart .stem')?.textContent.includes('ZZZ Unknown'));
+  const order=await page.locator('#grid .cart .stem').allTextContents();
+  if(!order[1].includes('Renderer Probe')||!order[2].includes('AAA Matched'))throw Error('Unmatched and suggested labels did not sort ahead of matched labels');
+  await page.getByRole('button',{name:'Edit Renderer Probe',exact:true}).click();
+  await page.locator('#ed-suggestion').waitFor({state:'visible'});
+  if(!(await page.locator('#ed-suggestion-name').textContent()).includes('Renderer Probe'))throw Error('Filename suggestion is missing');
+  if((await page.evaluate(()=>window.__studio.states().find(c=>c.stem.includes('patched')).wears))==='real')throw Error('Suggested label was applied without approval');
+  if(await page.locator('.cart:not(.current)').first().evaluate(el=>getComputedStyle(el).opacity)!=='1')throw Error('Editing still dims other games');
+  await page.locator('#ed-suggestion-approve').click();
+  await page.waitForFunction(()=>window.__studio.idle() && window.__studio.states().find(c=>c.stem.includes('patched')).wears==='real');
+  if(await page.locator('#ed-suggestion').isVisible())throw Error('Approved match remained pending');
+  await page.keyboard.press('Control+z');
+  await page.locator('#ed-suggestion').waitFor({state:'visible'});
+  await page.locator('#ed-suggestion-dismiss').click();
+  if(await page.locator('#ed-suggestion').isVisible())throw Error('Rejected suggestion remained visible');
   // The smoke mirror contains real public scans downloaded by the build. Read it
   // through our own origin, exactly as the published site will serve it.
   const live=await browser.newPage();
