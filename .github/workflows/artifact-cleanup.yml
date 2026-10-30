@@ -1,17 +1,20 @@
 name: Generated artifact retention
 on:
   pull_request:
-    paths: ['tools/artifact-retention*', '.github/workflows/artifact-retention.yml']
+    paths: ['tools/artifact-retention*', '.github/workflows/artifact-cleanup.yml']
   push:
     branches: [main]
-    paths: ['tools/artifact-retention*', '.github/workflows/artifact-retention.yml']
+    paths: ['tools/artifact-retention*', '.github/workflows/artifact-cleanup.yml']
   schedule:
     - cron: '17 * * * *'
+  workflow_run:
+    workflows: ["Build Cart Studio"]
+    types: [completed]
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: artifact-retention-${{ github.repository }}
+  group: keep-newest-actions-artifacts
   cancel-in-progress: false
 jobs:
   cleanup:
