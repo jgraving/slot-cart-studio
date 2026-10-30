@@ -4,9 +4,15 @@ const releaseFiles = ['slot.sp-System.zip', 'slot.sp-SD2.zip', 'SHA256SUMS', 'bu
 function completeRelease(release) {
   return release && !release.draft && releaseFiles.every(name => release.assets?.some(a => a.name === name && a.size > 0));
 }
-function planArtifacts(artifacts, runs, releases, now = Date.now()) {
+function planArtifacts(artifacts, runs, releases, now = Date.now(), activePaths = null) {
   const completed = artifacts.filter(a => runs.get(a.workflow_run?.id)?.status === 'completed');
   const newest = new Map();
+  const newestSet = new Map();
+  const pathOf = run => run.path?.split('@')[0];
+  for (const a of completed) {
+    const run = runs.get(a.workflow_run.id), path = pathOf(run);
+    if (path && run.conclusion === 'success' && (!newestSet.has(path) || run.id > newestSet.get(path))) newestSet.set(path, run.id);
+  }
   for (const a of completed) {
     if (!newest.has(a.name) || a.created_at > newest.get(a.name).created_at) newest.set(a.name, a);
   }
@@ -17,8 +23,11 @@ function planArtifacts(artifacts, runs, releases, now = Date.now()) {
     const published = a.name === 'release-downloads' && run.head_branch === 'main' && releases.some(r => completeRelease(r)
       && (r.target_commitish === run.head_sha || r.tag_name.endsWith('-' + run.head_sha.slice(0, 7))));
     const deployed = a.name === 'github-pages' && run.conclusion === 'success';
+    const path = pathOf(run);
+    const superseded = path ? newestSet.has(path) && newestSet.get(path) !== run.id : newest.get(a.name).id !== a.id;
+    const obsolete = path && activePaths && !activePaths.has(path);
     const reason = published ? 'copied to release assets' : deployed ? 'completed Pages bundle'
-      : age >= DAY ? 'older than 24 hours' : newest.get(a.name).id !== a.id ? 'superseded copy' : null;
+      : age >= DAY ? 'older than 24 hours' : obsolete ? 'retired workflow' : superseded ? 'superseded workflow set' : null;
     return reason ? [{...a, reason}] : [];
   });
 }
@@ -41,7 +50,10 @@ async function run({github, context, core, dryRun = true}) {
       catch (error) { core.warning(`Cannot verify run ${run_id}; retain its artifacts (${error.status || 'request failed'})`); }
     }));
   }
-  const selected = planArtifacts(artifacts, runs, releases);
+  const {data: directory} = await github.rest.repos.getContent({owner, repo, path: '.github/workflows'});
+  if (!Array.isArray(directory)) throw new Error('Cannot verify current workflows');
+  const activePaths = new Set(directory.filter(f => f.type === 'file' && /\.ya?ml$/.test(f.name)).map(f => f.path));
+  const selected = planArtifacts(artifacts, runs, releases, Date.now(), activePaths);
   let deleted = 0, bytes = 0;
   for (const a of selected) {
     // Recheck immediately before deletion: a rerun may have started during the audit.

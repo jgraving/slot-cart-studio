@@ -27,3 +27,11 @@ test('only matching complete published releases make fresh build downloads redun
  assert.equal(planArtifacts(items,runs,[release],now)[0].reason,'copied to release assets');
  assert.equal(planArtifacts(items,runs,[{...release,tag_name:'other'}],now).length,0);
 });
+
+test('keep the newest successful workflow set even when ZIP names change',()=>{
+ const items=[artifact(1,'old-sha.zip',2000),artifact(2,'new-sha.zip',1000)];
+ const path='.github/workflows/build.yml';
+ const runs=new Map([finished(1,{id:1,path}),finished(2,{id:2,path})]);
+ assert.deepEqual(planArtifacts(items,runs,[],now,new Set([path])).map(a=>a.id),[1]);
+ assert.deepEqual(planArtifacts(items,runs,[],now,new Set()).map(a=>a.id),[1,2]);
+});
