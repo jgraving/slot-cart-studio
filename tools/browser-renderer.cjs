@@ -121,6 +121,27 @@ const server = http.createServer((req,res) => {
   await page.getByRole('button',{name:'Edit Renderer Probe',exact:true}).click();
   await page.waitForFunction(()=>window.__studio.idle());
   if((await page.evaluate(()=>window.romStreams))!==0)throw Error('Checksum cache was not reused after reload');
+  // A fast cached ROM scan must not hide slow artwork or bulk label downloads.
+  await page.route('**/art/fixture/**', async route => {
+   await new Promise(resolve => setTimeout(resolve, 250));
+   const image=route.request().url().endsWith('logo.png')?'logo.png':'GBA-scan.png';
+   await route.fulfill({status:200,body:fs.readFileSync(path.join(fixtures,image)),contentType:'image/png'});
+  });
+  const unlabelled=path.join(fixtures,'unlabelled','Games','GBA');
+  fs.mkdirSync(unlabelled,{recursive:true});
+  const rom=fs.readFileSync(path.join(card,'Games','GBA','Renderer Probe.gba'));
+  for(let i=0;i<12;i++)fs.writeFileSync(path.join(unlabelled,`Progress ${i}.gba`),rom);
+  await page.locator('#ed-close').click();
+  await page.locator('#pick-files').setInputFiles(path.join(fixtures,'unlabelled'));
+  await page.waitForFunction(()=>/Finding artwork.*of 12 games.*%/.test(document.getElementById('progress-text').textContent));
+  if(!(await page.locator('#progress').isVisible()))throw Error('Artwork progress disappeared after reading ROMs');
+  if(!(await page.locator('#fill-open').isDisabled()))throw Error('Fill appeared ready before artwork finished');
+  await page.locator('#fill').waitFor({state:'visible'});
+  await page.locator('#fill-real').click();
+  await page.waitForFunction(()=>/Downloading labels.*%/.test(document.getElementById('progress-text').textContent));
+  if(!(await page.locator('#progress').isVisible()))throw Error('Bulk label download progress is missing');
+  await page.waitForFunction(()=>window.__studio.idle() && document.getElementById('progress').hidden);
+  if(!(await page.evaluate(()=>window.__studio.states().every(c=>c.wears==='real'))))throw Error('Label download did not finish the fill');
   // The smoke mirror contains real public scans downloaded by the build. Read it
   // through our own origin, exactly as the published site will serve it.
   const live=await browser.newPage();

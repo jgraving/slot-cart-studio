@@ -499,6 +499,10 @@ function fetchReal(s, c) {
   if (realOf(c)) return realOf(c).pending;
   const real = { path, bytes: null, failed: false, pending: null };
   c.real = real;
+  const work = artworkWork(s);
+  if (work.labelsDone === work.labelsTotal) { work.labelsDone = 0; work.labelsTotal = 0; }
+  work.labelsTotal++;
+  showArtworkProgress(s);
   real.pending = (async () => {
     let bytes = null;
     try {
@@ -512,7 +516,7 @@ function fetchReal(s, c) {
     if (bytes) real.bytes = bytes;
     else real.failed = true;
     paint(c);
-  })();
+  })().finally(() => { work.labelsDone++; showArtworkProgress(s); });
   return real.pending;
 }
 
@@ -575,6 +579,43 @@ function progress(done, total, stem, verb = 'Reading', fraction = done / Math.ma
   $('progress-text').textContent = stem ? `${meter.item} · ${Math.floor(fraction * 100)}% · ${meter.estimate.text(performance.now())}` : '';
 }
 
+// Keep downloads visible after the card-reading overlay has gone away. All queued
+// label requests count, including those started by the fill chooser and editor.
+function artworkWork(s) {
+  return s.artworkWork ??= { matching: false, done: 0, total: 0, labelsDone: 0, labelsTotal: 0,
+    phase: '', estimate: new LoadProgress(), timer: null };
+}
+
+function showArtworkProgress(s) {
+  const w = artworkWork(s);
+  if (s !== session || fatal) {
+    clearInterval(w.timer); w.timer = null;
+    return;
+  }
+  const phase = w.matching ? 'artwork' : w.labelsDone < w.labelsTotal ? 'labels' : '';
+  if (phase !== w.phase) { w.phase = phase; w.estimate.reset(performance.now()); }
+  if (!phase) {
+    clearInterval(w.timer); w.timer = null;
+    $('progress').hidden = true;
+    updateFillButton();
+    return;
+  }
+  const done = w.matching ? w.done : w.labelsDone;
+  const total = w.matching ? w.total : w.labelsTotal;
+  const fraction = done / Math.max(1, total);
+  w.estimate.update(fraction, performance.now());
+  const task = w.matching ? (w.database ? 'Loading game databases' : 'Finding artwork') : 'Downloading labels';
+  const detail = `${task} · ${done} of ${total} games · ${Math.floor(fraction * 100)}% · ${w.estimate.text(performance.now())}`;
+  $('progress').hidden = false;
+  $('bar').max = Math.max(1, total);
+  $('bar').value = done;
+  $('bar').setAttribute('aria-label', task);
+  $('bar').setAttribute('aria-valuetext', detail);
+  $('progress-text').textContent = detail;
+  if (!w.timer) w.timer = setInterval(() => showArtworkProgress(s), 1000);
+  updateFillButton();
+}
+
 function banner(text, retry) {
   const b = $('banner');
   b.replaceChildren(Object.assign(document.createElement('span'), { className: 'message', textContent: text }));
@@ -613,6 +654,7 @@ async function open(source) {
   selectedCarts.clear();
   bulkArtworkRevision++;
   loading(false);
+  if (session?.artworkWork) clearInterval(session.artworkWork.timer);
   session = { source, carts: source.carts.map(newCart) };
   $('banner').hidden = true;
   $('eject').hidden = true;
@@ -713,6 +755,20 @@ async function identify(s) {
 }
 
 async function match(s) {
+  if (s !== session || fatal) return;
+  const w = artworkWork(s);
+  w.matching = true; w.database = true; w.done = 0;
+  w.total = s.carts.filter(c => c.crc !== null && !c.game && !c.existing && !c.error).length;
+  showArtworkProgress(s);
+  try {
+    await matchArtwork(s);
+  } finally {
+    w.matching = false;
+    showArtworkProgress(s);
+  }
+}
+
+async function matchArtwork(s) {
   // One database per platform, fetched only for the platforms this card actually holds: a card
   // of nothing but GBA carts never pays for the two Game Boy databases.
   for (const platform of new Set(s.carts.map((c) => c.platform))) {
@@ -741,7 +797,13 @@ async function match(s) {
     $('banner').hidden = true;
   }
   const pending = s.carts.filter((c) => c.crc !== null && !c.game && !c.existing && !c.error);
-  await Promise.all(pending.map((c) => art(s, c)));
+  const w = artworkWork(s);
+  w.database = false; w.total = pending.length;
+  showArtworkProgress(s);
+  await Promise.all(pending.map(async c => {
+    try { await art(s, c); }
+    finally { w.done++; showArtworkProgress(s); }
+  }));
 }
 
 async function fill(s) {
@@ -989,6 +1051,9 @@ function writeProgress(done, total) {
 
 function updateFillButton() {
   if (!session) return;
+  const waiting = !!session.artworkWork?.matching || !!session.fillPreviewPending;
+  $('fill-open').disabled = waiting;
+  $('fill-open').textContent = waiting ? 'Preparing artwork…' : 'Fill unlabelled carts…';
   const counts = fillCounts(session.carts.map(view));
   $('fill-open').hidden = counts.unlabelled === 0 || (session.fill != null && autoFill(counts) !== null);
 }
@@ -1010,7 +1075,11 @@ async function askFill(s) {
   const sample =
     s.carts.find((c) => !c.existingPng && view(c).hasReal && view(c).hasLogo) ??
     s.carts.find((c) => !c.existingPng && (view(c).hasReal || view(c).hasLogo));
-  if (sample) await fetchReal(s, sample);
+  if (sample) {
+    s.fillPreviewPending = true; updateFillButton();
+    try { await fetchReal(s, sample); }
+    finally { s.fillPreviewPending = false; if (s === session) updateFillButton(); }
+  }
   if (s !== session || fatal) return;
   for (const kind of ['real', 'logo']) {
     const canvas = $(`fill-${kind}`).querySelector('canvas');
