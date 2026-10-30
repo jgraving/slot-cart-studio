@@ -68,7 +68,7 @@ jobs:
           NODE_PATH: ${{ runner.temp }}/studio-browser/node_modules
         run: |
           npm install --prefix "$RUNNER_TEMP/studio-browser" playwright@1.62.1
-          python3 -m pip install pillow==13.0.0
+          python3 -m pip install pillow==13.0.0 numpy==2.2.6
           python3 -m unittest discover -s tools -p 'test_*.py'
           python3 tools/mirror_art.py web/art --sample 2
           node tools/browser-renderer.cjs "$RUNNER_TEMP/studio-previews"
