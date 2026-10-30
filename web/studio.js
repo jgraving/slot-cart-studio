@@ -1487,15 +1487,7 @@ async function start() {
   document.body.dataset.ready = 'true';
 }
 
-document.querySelector('.hero .title').title = BUILD === 'dev' ? 'dev' : BUILD.slice(0, 7);
-$('build').append(
-  BUILD === 'dev'
-    ? 'dev'
-    : Object.assign(document.createElement('a'), {
-        href: `https://github.com/jgraving/slot-cart-studio/commit/${BUILD}`,
-        textContent: BUILD.slice(0, 7),
-      }),
-);
+document.documentElement.dataset.build = BUILD;
 start().catch((error) => {
   $('startup').hidden = true;
   logError('startup', error);
