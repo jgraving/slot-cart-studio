@@ -41,8 +41,9 @@
         <button class="btn ghost" id="how" type="button">How It Works</button>
       </div>
       <div class="loader" id="loader" role="status" hidden>
-        <span class="meter" aria-hidden="true"><span class="meter-fill" id="meter-fill"></span></span>
+        <span class="meter" id="loader-meter" role="progressbar" aria-label="Reading games" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="meter-fill" id="meter-fill"></span></span>
         <span class="loader-text" id="loader-text"></span>
+        <span class="loader-detail" id="loader-detail" aria-hidden="true"></span>
       </div>
     </div>
     <div class="trio" aria-hidden="true">

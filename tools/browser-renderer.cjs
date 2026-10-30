@@ -38,8 +38,16 @@ const server = http.createServer((req,res) => {
   await page.locator('#start').click();
   await page.locator('#pick-files-label').waitFor({state:'visible'});
   await page.locator('#pick-files').setInputFiles(path.join(fixtures,'card'));
+  await page.waitForFunction(()=>/\d+%/.test(document.getElementById('loader-detail').textContent));
+  const percentage=Number(await page.locator('#loader-meter').getAttribute('aria-valuenow'));
+  if(!(percentage>=0&&percentage<=100))throw Error('Loading percentage is outside its range');
+  const detail=await page.locator('#loader-detail').textContent();
+  if(!/Estimating|About|seconds|Finishing|Complete/.test(detail))throw Error('Loading time estimate is missing');
+  await page.locator('body.loading').waitFor({state:'hidden'});
   await page.locator('.cart .face').first().click();
   await page.locator('#editor').waitFor({state:'visible'});
+  // Opening an existing label starts its background lookup; it must finish before styling.
+  await page.waitForFunction(()=>window.__studio.idle());
   const finish=page.locator('#ed-finish [data-value="clear"]');
   if(!(await finish.isEnabled()))throw Error('Finish requires a color change on an automatic shell');
   await finish.click();

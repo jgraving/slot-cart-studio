@@ -25,6 +25,7 @@ import init, {
   stub_target,
   thumbnail_name,
 } from './pkg/slot_cart_studio.js';
+import { LoadProgress } from './load-progress.js';
 import { fromDirectory, fromFiles, labelKey, PLATFORMS } from './card.js';
 import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.js';
 import { applyBulkStyle, applyBulkArtwork } from './bulk-style.js';
@@ -528,13 +529,19 @@ async function takeLogo(c, file) {
 
 const FILL_MS = 350;
 const HOLD_MS = 100;
-const meter = { start: 0, target: 0, frame: 0 };
+const meter = { start: 0, target: 0, frame: 0, estimate: new LoadProgress(), item: '' };
 const shown = () => Math.min(meter.target, (performance.now() - meter.start) / FILL_MS);
 
 function drawMeter() {
   const f = shown();
   $('meter-fill').style.width = `${(f * 100).toFixed(1)}%`;
-  $('loader-text').textContent = f < 0.6 ? 'Reading your SD card…' : 'Finding your games…';
+  $('loader-text').textContent = meter.target < 1 ? 'Reading your games…' : 'Finishing…';
+  const percent = Math.floor(f * 100);
+  const detail = `${percent}% · ${meter.target >= 1 && f < 1 ? 'Finishing…' : meter.estimate.text(performance.now())}`;
+  if ($('loader-detail').textContent !== detail) $('loader-detail').textContent = detail;
+  $('loader-meter').setAttribute('aria-valuenow', String(percent));
+  $('loader-meter').setAttribute('aria-valuetext', detail);
+  if (!$('progress').hidden) $('progress-text').textContent = `${meter.item} · ${detail}`;
   meter.frame = document.body.classList.contains('loading') ? requestAnimationFrame(drawMeter) : 0;
 }
 
@@ -542,12 +549,11 @@ function loading(on, fraction) {
   document.body.classList.toggle('loading', on);
   $('loader').hidden = !on;
   if (!on) return;
-  if (fraction === 0) Object.assign(meter, { start: performance.now(), target: 0 });
-  if (fraction != null) meter.target = Math.max(meter.target, fraction);
+  if (fraction === 0) { Object.assign(meter, { start: performance.now(), target: 0, item: '' }); meter.estimate.reset(meter.start); }
+  if (fraction != null) { meter.target = Math.max(meter.target, fraction); meter.estimate.update(fraction, performance.now()); }
   if (!meter.frame) meter.frame = requestAnimationFrame(drawMeter);
 }
 
-const READ_SHARE = 0.8;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function loaded(s) {
@@ -560,12 +566,13 @@ async function loaded(s) {
   $('how-shelf').hidden = false;
 }
 
-function progress(done, total, stem, verb = 'Reading') {
-  if (document.body.classList.contains('loading') && stem) loading(true, (done / total) * READ_SHARE);
+function progress(done, total, stem, verb = 'Reading', fraction = done / Math.max(1,total)) {
+  if (document.body.classList.contains('loading')) loading(true, fraction);
   $('progress').hidden = done >= total;
   $('bar').max = total;
-  $('bar').value = done;
-  $('progress-text').textContent = stem ? `${verb} ${done + 1} of ${total}: ${stem}` : '';
+  $('bar').value = fraction * total;
+  meter.item = stem ? `${verb} ${Math.min(done + 1, total)} of ${total}: ${stem}` : '';
+  $('progress-text').textContent = stem ? `${meter.item} · ${Math.floor(fraction * 100)}% · ${meter.estimate.text(performance.now())}` : '';
 }
 
 function banner(text, retry) {
@@ -667,7 +674,7 @@ async function identify(s) {
   const fractions=new Map();
   await scanLimited(s.carts,2,async c=>{
     if (s !== session || fatal) return;
-    const report=fraction=>{fractions.set(c,fraction);progress(completed,total,c.stem);loading(true,(completed+[...fractions.values()].reduce((a,b)=>a+b,0))/total*READ_SHARE);};
+    const report=fraction=>{fractions.set(c,fraction);progress(completed,total,c.stem,'Reading',(completed+[...fractions.values()].reduce((a,b)=>a+b,0))/total);};
     report(0);
     try {
       const file = await c.file();
@@ -693,7 +700,7 @@ async function identify(s) {
     if(s!==session||fatal)return;
     fractions.delete(c);completed++;
     paint(c);
-    progress(completed,total,c.stem);
+    progress(completed,total,c.stem,'Reading',(completed+[...fractions.values()].reduce((a,b)=>a+b,0))/total);
   },()=>s===session&&!fatal);
   // A card opened during the last read has its own bar up by now.
   if (s !== session) return;

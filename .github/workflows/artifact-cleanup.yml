@@ -1,58 +1,36 @@
-name: Keep newest Actions artifacts
-
+name: Generated artifact retention
 on:
+  pull_request:
+    paths: ['tools/artifact-retention*', '.github/workflows/artifact-cleanup.yml']
+  push:
+    branches: [main]
+    paths: ['tools/artifact-retention*', '.github/workflows/artifact-cleanup.yml']
+  schedule:
+    - cron: '17 * * * *'
   workflow_run:
     workflows: ["Build Cart Studio"]
     types: [completed]
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/artifact-cleanup.yml']
-
 permissions:
-  actions: write
   contents: read
-
 concurrency:
   group: keep-newest-actions-artifacts
   cancel-in-progress: false
-
 jobs:
   cleanup:
+    if: github.repository_owner == 'jgraving'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: write
     steps:
-      # Uses API metadata only; never checks out or executes triggering-run code.
-      - uses: actions/github-script@v8
+      - uses: actions/checkout@v7
+      - name: Test retention boundaries
+        run: node --test tools/artifact-retention.test.cjs
+      - name: Audit or clean completed workflow artifacts
+        uses: actions/github-script@v8
         with:
           script: |
-            const repo = context.repo;
-            const directory = (await github.rest.repos.getContent({...repo, path: '.github/workflows'})).data;
-            if (!Array.isArray(directory)) throw new Error('Cannot verify current workflows');
-            const active = new Set(directory.filter(f => f.type === 'file' && /\.ya?ml$/.test(f.name)).map(f => f.path));
-            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {...repo, per_page: 100});
-            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {...repo, per_page: 100});
-            const byRun = new Map(runs.map(r => [r.id, r]));
-            const keep = new Map();
-            const pathOf = run => run.path.split('@')[0];
-            for (const artifact of artifacts) {
-              const run = byRun.get(artifact.workflow_run?.id);
-              if (!run || artifact.expired || run.status !== 'completed' || run.conclusion !== 'success') continue;
-              const path = pathOf(run);
-              if (active.has(path) && (!keep.has(path) || run.id > keep.get(path))) keep.set(path, run.id);
-            }
-            if (!keep.size) throw new Error('No successful replacement sets found; refusing cleanup');
-            for (const [path, id] of keep) core.info(`Keeping newest successful set: ${path}, run ${id}`);
-            let deleted = 0;
-            for (const artifact of artifacts) {
-              const run = byRun.get(artifact.workflow_run?.id);
-              if (!run || run.status !== 'completed') continue;
-              const path = pathOf(run);
-              // Current workflows without a successful set are left alone.
-              if (active.has(path) && (!keep.has(path) || keep.get(path) === run.id)) continue;
-              core.info(`Deleting superseded artifact ${artifact.name} (${artifact.id}, run ${run.id})`);
-              await github.rest.actions.deleteArtifact({...repo, artifact_id: artifact.id});
-              deleted++;
-            }
-            core.info(`Deleted ${deleted} artifacts`);
-            
+            const {run} = require('./tools/artifact-retention.cjs');
+            await run({github, context, core, dryRun: context.eventName === 'pull_request'});

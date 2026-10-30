@@ -415,3 +415,5 @@ body.editing .cart:not(.current){opacity:.45}
 .tile .badge.on-card{background:var(--shell-accent);color:var(--opening)}
 .tile .add{display:grid;place-items:center;aspect-ratio:1.6;border:2px dashed #55555f;border-radius:4px;color:var(--muted);font-size:24px}
 .tile.has-file .add{display:none}
+
+.loader-detail{color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums;min-height:1.5em;text-align:center}
