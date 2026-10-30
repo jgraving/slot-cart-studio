@@ -19,6 +19,7 @@ const server = http.createServer((req,res) => {
  try {
   const page=await browser.newPage({viewport:{width:1440,height:1000},acceptDownloads:true});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.addInitScript(()=>{window.romStreams=0;const original=File.prototype.stream;File.prototype.stream=function(){window.romStreams++;return original.call(this);};});
   let catalogRequests=0;
   await page.route('**/art/**', async route=>{
    if(route.request().url().endsWith('/index.json')){catalogRequests++;return route.fulfill({status:200,json:{[metadata.crc]:{'support-texture':'fixture/label.png',wheel:'fixture/logo.png'}}});}
@@ -56,6 +57,8 @@ const server = http.createServer((req,res) => {
   await (await chooser).setFiles(path.join(fixtures,'GBA-scan.png'));
   await page.locator('#ed-tiles [data-kind="customLabel"][aria-pressed="true"]').waitFor();
   await page.screenshot({path:path.join(fixtures,'studio-label.png'),fullPage:true});
+  const firstReads=await page.evaluate(()=>window.romStreams);
+  if(firstReads!==1)throw Error(`Expected one checksum read for first edit, got ${firstReads}`);
   await page.locator('#ed-close').click();
   const downloaded=page.waitForEvent('download');
   await page.locator('#write').click();
@@ -86,6 +89,8 @@ const server = http.createServer((req,res) => {
   await page.locator('#bulk-artwork').selectOption('real');
   await page.waitForFunction(()=>window.__studio.idle() && window.__studio.states().find(c=>c.stem==='Renderer Probe').wears==='real');
   if(!(await page.locator('#bulk-status').textContent()).includes('artwork was kept'))throw Error('Missing label did not preserve existing artwork');
+  if((await page.evaluate(()=>window.romStreams))!==firstReads+1)throw Error('An unchanged game was fully reread instead of using its cached checksum');
+  // Only the newly selected GB fixture requires another checksum.
   await page.screenshot({path:path.join(fixtures,'studio-bulk.png'),fullPage:true});
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:path.join(fixtures,'studio-bulk-mobile.png'),fullPage:true});
@@ -102,6 +107,12 @@ const server = http.createServer((req,res) => {
   await (await bulkDownload).saveAs(bulkPath);
   const bulk=fs.readFileSync(bulkPath).toString('latin1');
   if(!bulk.includes('Renderer Probe = auto 123456 clear')||!bulk.includes('Style GB = auto 123456 clear')||bulk.includes('Style Second ='))throw Error('Bulk export changed the wrong carts or missed selected shells');
+  // Reopening after a page reload also reuses IndexedDB, without retaining files.
+  await page.reload();await page.locator('body[data-ready=true]').waitFor();
+  await page.locator('#start').click();await page.locator('#pick-files').setInputFiles(card);
+  await page.getByRole('button',{name:'Edit Renderer Probe',exact:true}).click();
+  await page.waitForFunction(()=>window.__studio.idle());
+  if((await page.evaluate(()=>window.romStreams))!==0)throw Error('Checksum cache was not reused after reload');
   // The smoke mirror contains real public scans downloaded by the build. Read it
   // through our own origin, exactly as the published site will serve it.
   const live=await browser.newPage();
