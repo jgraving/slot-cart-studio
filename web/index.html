@@ -12,7 +12,7 @@
 </head>
 <body>
 <header class="mast">
-  <a class="mast-mark" href="https://jakegraving.com/slot.sp/">slot.sp</a>
+  <span class="mast-brand"><a class="mast-mark" href="https://jakegraving.com/slot.sp/">slot.sp</a><a class="mast-sub" href="./">Cart Studio</a></span>
   <button class="menu-btn" type="button" id="menu-btn" aria-expanded="false" aria-controls="mast-links" aria-label="Sections">
     <span class="menu-bars" aria-hidden="true"></span>
   </button>
@@ -22,15 +22,31 @@
     <a href="./" aria-current="page">Cart Studio</a>
     <a href="https://jakegraving.com/slot.sp/questions/">About</a>
   </nav>
+  <div class="mast-end">
+    <a class="mast-gh" href="https://discord.gg/NYRWsSuPUu" aria-label="slot on Discord">
+      <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="currentColor"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>
+    </a>
+    <a class="mast-gh" href="https://github.com/jgraving/slot-cart-studio" aria-label="Cart Studio on GitHub">
+      <svg viewBox="0 0 16 16" width="28" height="28" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    </a>
+  </div>
 </header>
 <main class="wrap">
-  <header class="intro">
-    <h1 class="title">Cart Studio</h1>
-    <p class="studio-intro">Edit game labels and cartridge colors. Save to your SD card or download a ZIP.</p>
+  <header class="hero" id="hero">
+    <div class="hero-copy">
+      <h1 class="title">Cart Studio</h1>
     <aside class="privacy-box" aria-label="Your privacy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 4 6v6c0 4 8 9 8 9s8-5 8-9V6z"/><path d="m8 12 3 3 5-6"/></svg><div><strong>Your files stay on your device</strong><p>Studio edits your games and labels in your browser. Nothing is uploaded. Save your changes to your SD card or download a ZIP when you’re ready.</p><p class="privacy-detail">Only game information and artwork are downloaded from the internet.</p></div></aside>
-    <div class="actions">
-      <button class="btn" id="pick" type="button" hidden>Choose SD Card</button>
-      <label class="btn" id="pick-files-label" hidden><span id="pick-files-text">Choose SD Card</span><input id="pick-files" class="visually-hidden" type="file" webkitdirectory></label>
+      <div class="actions">
+        <button class="btn" id="start" type="button">Get Started</button>
+        <button class="btn ghost" id="how" type="button">How It Works</button>
+      </div>
+      <div class="loader" id="loader" role="status" hidden>
+        <span class="meter" aria-hidden="true"><span class="meter-fill" id="meter-fill"></span></span>
+        <span class="loader-text" id="loader-text"></span>
+      </div>
+    </div>
+    <div class="trio" aria-hidden="true">
+      <canvas data-platform="GBA"></canvas><canvas data-platform="GBC"></canvas><canvas data-platform="GB"></canvas>
     </div>
     <p class="studio-note">Choose the card’s top folder, with Games and Labels inside. <a href="https://jakegraving.com/slot.sp/features/cart-studio/">Read the Studio guide</a>.</p>
     <p id="startup" role="status">Loading Cart Studio…</p>
@@ -43,14 +59,11 @@
     <span id="progress-text"></span>
   </div>
 
-  <div class="loader" id="loader" role="status" hidden>
-    <span class="spinner" aria-hidden="true"></span>
-    <span id="loader-text"></span>
-  </div>
 
   <div class="shelf-bar">
     <nav class="shelf-tabs" id="tabs" aria-label="Platforms" hidden></nav>
-    <button class="key dark" id="bulk-open" type="button" aria-pressed="false" hidden>Select carts</button>
+    <button class="selection-switch" id="bulk-open" type="button" role="switch" aria-checked="false" aria-controls="bulk-panel" hidden><span class="switch-track" aria-hidden="true"></span>Select carts <span id="bulk-mode" aria-hidden="true">Off</span></button>
+    <button class="btn ghost how-shelf" id="how-shelf" type="button" hidden>How It Works</button>
     <button class="key dark fill-open" id="fill-open" type="button" hidden>Fill unlabelled carts…</button>
     <div class="write-bar" id="write-bar" hidden>
       <span class="eject" id="eject" role="status" hidden>Eject the card before you take it out, or slot may not find your games.</span>
@@ -60,27 +73,33 @@
 
   <section id="bulk-panel" class="bulk-panel" aria-label="Style selected carts" hidden>
     <div class="bulk-heading"><strong id="bulk-count" aria-live="polite">0 carts selected</strong><button class="key dark" id="bulk-all" type="button">Select this system</button><button class="key dark" id="bulk-clear" type="button">Clear selection</button></div>
-    <p>Choose carts, then change their shells together. Labels and cartridge shapes stay as they are.</p>
+    <p>Choose carts, then change artwork, color or finish to preview updates immediately. Turn Select carts off or choose Done to return to editing.</p>
     <div class="bulk-fields">
+      <label>Artwork <select id="bulk-artwork"><option value="">Keep existing</option><option value="real">Label</option><option value="logo">Logo</option></select></label>
       <label>Color <select id="bulk-colour-mode"><option value="keep">Keep existing</option><option value="custom">Choose color</option></select></label>
       <input id="bulk-colour" type="color" value="#6a3fa0" aria-label="Shell color" hidden>
       <label>Finish <select id="bulk-finish"><option value="">Keep existing</option><option value="solid">Solid</option><option value="clear">Clear</option><option value="glitter">Glitter</option></select></label>
-      <button class="btn" id="bulk-apply" type="button" disabled>Apply to selected</button>
       <button class="key dark" id="bulk-done" type="button">Done</button>
     </div>
     <p id="bulk-status" role="status">Changes stay in Studio until you write to the card or export.</p>
   </section>
 
   <section class="grid" id="grid" aria-label="Carts"></section>
-
-  <footer class="credits">
-    <p>Cart Studio for slot.sp by Jake Graving, based on <a href="https://github.com/BrandonKowalski/slot-cart-studio">Cart Studio by Brandon T. Kowalski</a>. <a href="https://github.com/jgraving/slot-cart-studio">Source code</a> · <a href="LICENSE">GPL-3.0-or-later</a></p>
-    <p>Game names and CRCs from <a href="https://github.com/libretro/libretro-database">libretro-database</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>).</p>
-    <p>Game logos from <a href="https://www.screenscraper.fr/">ScreenScraper</a> (<a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a>).</p>
-    <p>Game Boy is a trademark of Nintendo. Not affiliated with Nintendo.</p>
-    <p id="build"></p>
-  </footer>
 </main>
+<footer class="site-foot">
+  <div class="foot-meta">
+    <p>Cart Studio for slot.sp by Jake Graving, based on <a href="https://github.com/BrandonKowalski/slot-cart-studio">Cart Studio by Brandon T. Kowalski</a>. <a href="https://github.com/jgraving/slot-cart-studio">Source code</a> · <a href="LICENSE">GPL-3.0-or-later</a></p>
+    <div class="foot-credits">
+      <div>
+        <p>Game names and CRCs from <a href="https://github.com/libretro/libretro-database">libretro-database</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>).</p>
+        <p>Game labels and logos from <a href="https://www.screenscraper.fr/">ScreenScraper</a> (<a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a>).</p>
+      </div>
+      <div>
+        <p>Game Boy is a trademark of Nintendo. slot is not affiliated with Nintendo.</p>
+      </div>
+    </div>
+  </div>
+</footer>
 
 <dialog id="fill" class="fill" aria-labelledby="fill-title" tabindex="-1">
   <h2 id="fill-title"></h2>
@@ -91,10 +110,59 @@
   </div>
 </dialog>
 
+<dialog id="choose" class="sheet" aria-labelledby="choose-title">
+  <h2 id="choose-title">Choose your SD card</h2>
+  <ol class="guide-steps">
+    <li><div><b>Put your slot SD card in your computer</b></div></li>
+    <li><div><b>Pick the card itself</b><span>The top folder, with Games and Labels inside. Not Games, not Labels.</span></div></li>
+    <li><div><b id="choose-ask-title"></b><span id="choose-ask"></span></div></li>
+  </ol>
+  <div class="sheet-foot">
+    <button class="link" id="choose-cancel" type="button">Cancel</button>
+    <button class="btn" id="pick" type="button">Choose SD Card</button>
+    <label class="btn ghost" id="pick-files-label" hidden><span id="pick-files-text">Open folder for ZIP export</span><input id="pick-files" class="visually-hidden" type="file" webkitdirectory></label>
+  </div>
+</dialog>
+
+<dialog id="help" class="sheet" aria-labelledby="help-title">
+  <h2 id="help-title">How Cart Studio Works</h2>
+  <h3>Four steps</h3>
+  <ol class="help-steps">
+    <li><b>Choose your SD card.</b> Pick the top of the card, the folder with Games in it.</li>
+    <li><b>Cart Studio will look up art for your games.</b></li>
+    <li><b>Tweak any cart.</b> Click it to swap the label for a logo or your own art, or change the shell colour.</li>
+    <li><b>Save.</b> Chrome and Edge write straight to the card. Safari and Firefox give you a ZIP and walk you through unpacking it to your card.</li>
+  </ol>
+  <h3>Making your own labels</h3>
+  <p>Save a PNG named after the game in that system’s folder: <code>Labels/GBA/Metroid Fusion.png</code> goes with <code>Games/GBA/Metroid Fusion.gba</code>.</p>
+  <table class="sizes">
+    <thead><tr><th>Cart</th><th>Shape</th><th>Suggested size</th></tr></thead>
+    <tbody id="sizes"></tbody>
+  </table>
+  <div class="sheet-foot"><button class="btn" id="help-close" type="button">Got it</button></div>
+</dialog>
+
+<dialog id="guide" class="sheet" aria-labelledby="guide-title">
+  <h2 id="guide-title">Put your labels on the card</h2>
+  <p>Your browser does not support writing directly to the SD Card.</p>
+  <p>You will need to manually copy them over to your SD Card.</p>
+
+  <div class="seg os" id="guide-os" role="group" aria-label="Your computer">
+    <button type="button" data-os="mac">Mac</button>
+    <button type="button" data-os="windows">Windows</button>
+    <button type="button" data-os="linux">Linux</button>
+  </div>
+  <ol class="guide-steps" id="guide-steps"></ol>
+  <div class="sheet-foot">
+    <button class="link" id="guide-again" type="button">Download again</button>
+    <button class="btn" id="guide-done" type="button">Done</button>
+  </div>
+</dialog>
+
 <aside id="editor" class="editor" aria-label="Cart editor" tabindex="-1" hidden>
   <div class="ed-head">
     <h2 id="ed-name"></h2>
-    <button class="key dark ed-icon" id="ed-close" type="button" aria-label="Close">✕</button>
+    <button class="ed-close" id="ed-close" type="button" aria-label="Close"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
   </div>
   <canvas id="ed-face" class="ed-face" aria-label="The cart"></canvas>
   <div class="props">
@@ -168,6 +236,7 @@
       </div>
     </div>
   </div>
+  <dl class="ed-info" id="ed-info" aria-label="About this cart"></dl>
   <div class="ed-foot">
     <div class="ed-history">
       <button class="key dark" id="ed-undo" type="button" title="Undo (⌘Z)">Undo</button>
@@ -184,7 +253,6 @@
       <canvas hidden></canvas>
     </div>
     <h2 class="stem"></h2>
-    <p class="print"></p>
     <p class="game"></p>
   </article>
 </template>

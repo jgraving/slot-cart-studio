@@ -1,5 +1,5 @@
 /* slot's palette and masthead, from slot's site/style.css, so the studio reads as one of its pages.
-   The --shell-* tones are slot's silver RG SP: the current shelf tab, and what is picked or outlined. */
+   The --shell-* tones are slot's silver RG SP: what is picked or outlined. */
 :root{
   --housing:#242429;
   --recess:#1a1a1d;
@@ -52,13 +52,20 @@ a{color:var(--ink)}
   backdrop-filter:blur(10px);
   border-bottom:1px solid var(--rule);
 }
-.mast-mark{font-weight:700;font-size:22px;color:var(--ink);text-decoration:none;letter-spacing:-.02em;justify-self:start}
+.mast-brand{display:flex;align-items:baseline;gap:8px;justify-self:start;min-width:0}
+.mast-mark{font-weight:700;font-size:22px;color:var(--ink);text-decoration:none;letter-spacing:-.02em}
+.mast-sub{font-weight:600;font-size:22px;color:var(--muted);text-decoration:none;letter-spacing:-.02em;white-space:nowrap}
+body:not(.card-open) .mast-sub,.hero.opened{display:none}
 .mast-links{display:flex;gap:2px;justify-content:center}
 .mast-links a{padding:9px 14px;font-size:16px;font-weight:600;color:var(--muted);text-decoration:none;white-space:nowrap;border-radius:8px;transition:color .2s ease,background .2s ease}
 .mast-links a:hover{color:var(--ink)}
 /* The studio is the page you are on, lit as slot's site lights its selected section. */
 .mast-links a[aria-current="page"]{color:var(--ink);background:var(--rule)}
 .mast-links a:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.mast-end{justify-self:end;display:flex;align-items:center;gap:clamp(6px,1.2vw,14px)}
+.mast-gh{display:grid;place-items:center;color:var(--muted);transition:color .2s ease}
+.mast-gh:hover{color:var(--ink)}
+.mast-gh:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .menu-btn{display:none;appearance:none;background:none;border:1px solid var(--rule);border-radius:8px;width:40px;height:36px;place-items:center;color:var(--ink);cursor:pointer;justify-self:end}
 .menu-btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .menu-bars,.menu-bars::before,.menu-bars::after{display:block;width:17px;height:2px;border-radius:2px;background:currentColor}
@@ -67,9 +74,9 @@ a{color:var(--ink)}
 .menu-bars::before{top:-6px}
 .menu-bars::after{top:6px}
 @media (max-width:880px){
-  .mast{padding:0 14px;gap:12px;grid-template-columns:1fr auto}
-  .mast-mark{font-size:19px}
-  .menu-btn{display:grid}
+  .mast{padding:0 14px;gap:12px;grid-template-columns:1fr auto auto}
+  .mast-mark,.mast-sub{font-size:19px}
+  .menu-btn{display:grid;order:1}
   .mast-links{position:absolute;top:100%;left:0;right:0;display:none;flex-direction:column;gap:2px;padding:8px;background:var(--page);border-bottom:1px solid var(--rule);box-shadow:0 18px 34px rgba(0,0,0,.55)}
   .mast-links.is-open{display:flex}
   .mast-links a{padding:13px 14px}
@@ -127,8 +134,29 @@ a{color:var(--ink)}
 /* ---------------------------------------------------------------- page --- */
 
 .wrap{max-width:1180px;margin:0 auto;padding:clamp(28px,5vh,48px) 24px}
+body.card-open .wrap{padding-top:0}
 .title{font-size:clamp(40px,7vw,64px);font-weight:700;letter-spacing:-.045em;line-height:1.05;margin:0}
-.intro{text-align:center}
+.hero{display:flex;align-items:center;justify-content:center;gap:clamp(40px,7vw,92px);min-height:min(68vh,620px)}
+.hero-copy{flex:0 1 auto;min-width:0;text-align:center}
+.hero .title{font-size:clamp(48px,7.5vw,76px);line-height:1}
+.hero .actions{margin-top:34px}
+.trio{position:relative;flex:0 0 auto;width:clamp(260px,34vw,400px);aspect-ratio:1/1}
+.trio::after{content:'';position:absolute;inset:-12%;background:radial-gradient(50% 45% at 50% 55%,rgba(255,255,255,.08),transparent 70%);pointer-events:none}
+.trio canvas{position:absolute;height:auto;filter:drop-shadow(0 18px 28px rgba(0,0,0,.55));opacity:0;transition:opacity .5s ease,transform .5s ease}
+.trio canvas.in{opacity:1}
+.trio [data-platform=GBA]{width:54%;left:0;top:14%;transform:rotate(-9deg) translateY(10px);z-index:1}
+.trio [data-platform=GBA].in{transform:rotate(-9deg)}
+.trio [data-platform=GBC]{width:46%;right:0;top:0;transform:rotate(8deg) translateY(10px);z-index:2}
+.trio [data-platform=GBC].in{transform:rotate(8deg)}
+.trio [data-platform=GB]{width:46%;left:22%;bottom:-4%;transform:rotate(-2deg) translateY(10px);z-index:3}
+.trio [data-platform=GB].in{transform:rotate(-2deg)}
+@media (max-width:720px){
+  .hero{flex-direction:column;gap:28px;min-height:0}
+  .trio{width:min(78vw,320px)}
+}
+@media (prefers-reduced-motion:reduce){
+  .trio canvas{transition:none}
+}
 .actions{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:22px}
 .banner{margin:24px 0 0;padding:14px 16px;border:1px solid var(--error);border-radius:6px;background:var(--error-ground);box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
 .banner:not([hidden]){display:flex;align-items:center;gap:10px}
@@ -137,20 +165,48 @@ a{color:var(--ink)}
 .banner .copy-log{margin-left:auto;flex:none}
 .progress{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:24px 0 0;color:var(--muted);font-size:15px}
 .progress progress{width:min(320px,100%);accent-color:var(--shell-accent)}
-.loader{display:flex;flex-direction:column;align-items:center;gap:16px;margin:64px 0;color:var(--muted);font-size:15px;text-align:center;overflow-wrap:anywhere}
-.spinner{width:40px;height:40px;border:3px solid var(--housing);border-top-color:var(--shell-accent);border-radius:50%;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
+.loader{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:34px}
+.meter{position:relative;display:block;width:240px;max-width:100%;height:6px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden}
+.meter-fill{position:absolute;inset:0 auto 0 0;width:0;border-radius:inherit;background:var(--ink);box-shadow:0 0 14px rgba(244,245,249,.45)}
+.loader-text{color:var(--muted);font-size:15px}
+body.loading .hero .actions{display:none}
 body.loading #grid,body.loading .shelf-bar,body.loading #progress{display:none}
 /* The platform tabs and the write button share one row, pinned under the masthead so the button
    stays with the choices you just made while the carts scroll beneath. The shelf's edge runs
    under both. */
-.shelf-bar{position:sticky;top:var(--mast-h);z-index:10;display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin-top:24px;padding-top:12px;background:var(--page);border-bottom:3px solid var(--housing)}
+.shelf-bar{position:sticky;top:var(--mast-h);z-index:10;display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin-top:24px;padding-top:12px;background:var(--page)}
 .shelf-bar:not(:has(> :not([hidden]))){display:none}
 .write-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:14px;margin-left:auto}
 .write-bar .eject{color:var(--muted);font-size:15px}
 .write-bar .btn{display:inline-flex;align-items:center;height:var(--shelf-row);padding-top:0;padding-bottom:0}
 .fill-open{margin:0 0 6px auto}
 .fill-open:not([hidden])+.write-bar{margin-left:0}
+.btn.ghost{background:none;color:var(--ink);border-color:var(--edge)}
+.btn.ghost:hover{background:var(--rule)}
+.how-shelf{display:inline-flex;align-items:center;height:var(--shelf-row);padding-top:0;padding-bottom:0;margin-left:auto}
+.how-shelf:not([hidden])~.fill-open,.how-shelf:not([hidden])~.write-bar{margin-left:0}
+.sheet{width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 48px);padding:26px;border:1px solid var(--rule);border-radius:12px;background:var(--housing);color:var(--ink);box-shadow:0 24px 60px rgba(0,0,0,.6);overflow:auto}
+.sheet::backdrop{background:rgba(10,10,14,.72)}
+.sheet:focus{outline:0}
+.sheet h2{margin:0 0 8px;font-size:21px}
+.sheet h3{margin:22px 0 8px;font-size:15px}
+.sheet p{margin:0 0 14px;color:var(--muted);font-size:15px;line-height:1.5}
+.sheet code{font-family:var(--mono);font-size:13px;padding:1px 5px;border-radius:4px;background:var(--rule);color:var(--ink)}
+.help-steps{margin:0;padding-left:20px;display:grid;gap:7px;color:var(--muted);line-height:1.5}
+.help-steps b{color:var(--ink);font-weight:600}
+.sizes{width:100%;border-collapse:collapse;font-size:14px}
+.sizes th,.sizes td{padding:8px;text-align:left;border-bottom:1px solid var(--rule)}
+.sizes th{color:var(--muted);font-weight:600}
+.sizes td:nth-child(n+2){font-variant-numeric:tabular-nums}
+.sheet .os{margin:0 0 18px}
+.guide-steps{margin:0;padding:0;list-style:none;display:grid;gap:14px;counter-reset:step}
+.guide-steps li{display:grid;grid-template-columns:28px 1fr;gap:12px;counter-increment:step;line-height:1.45}
+.guide-steps li::before{content:counter(step);width:28px;height:28px;border-radius:50%;background:var(--rule);display:grid;place-items:center;font-weight:700;font-size:14px}
+.guide-steps b{display:block}
+.guide-steps span{color:var(--muted);font-size:14px}
+.sheet-foot{display:flex;align-items:center;justify-content:flex-end;gap:16px;margin-top:22px}
+.sheet-foot .link{margin-right:auto;padding:0;border:0;background:none;color:var(--muted);font:inherit;font-size:14px;text-decoration:underline;cursor:pointer}
+.sheet-foot .link:hover{color:var(--ink)}
 .fill{max-width:min(520px,calc(100vw - 32px));padding:22px;border:0;border-radius:12px;background:var(--housing);color:var(--ink);box-shadow:0 24px 60px rgba(0,0,0,.6)}
 .fill::backdrop{background:rgba(10,10,14,.72)}
 .fill h2{margin:0 0 6px;font-size:19px}
@@ -165,24 +221,25 @@ body.loading #grid,body.loading .shelf-bar,body.loading #progress{display:none}
 .fill-choice b{font-size:15px}
 .fill-choice small{color:var(--muted);font-size:12px;line-height:1.4}
 
-/* One tab per platform on the card, each the top edge of a cart standing on the shelf. */
 .shelf-tabs{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
 .shelf-tab{
-  padding:11px 18px 8px;
-  border:0;
-  border-radius:9px 9px 0 0;
+  display:inline-flex;
+  align-items:center;
+  height:var(--shelf-row);
+  padding:0 18px;
+  border:1px solid var(--edge);
+  border-radius:8px;
   font:inherit;
-  font-size:15px;
+  font-size:16px;
   font-weight:600;
   color:var(--muted);
-  background:linear-gradient(180deg,#34343c,var(--housing));
-  box-shadow:inset 0 1px 0 #45454e;
+  background:none;
   cursor:pointer;
-  height:var(--shelf-row);
+  transition:background .12s ease,color .12s ease;
 }
 .shelf-tab .n{margin-left:8px;font-weight:400;opacity:.7}
-.shelf-tab:hover{color:var(--ink)}
-.shelf-tab[aria-pressed="true"]{color:var(--shell-ink);background:linear-gradient(180deg,var(--shell-light),var(--shell-base));text-shadow:0 1px 0 color-mix(in srgb,var(--shell-light) 55%,transparent)}
+.shelf-tab:hover{color:var(--ink);background:var(--rule)}
+.shelf-tab[aria-pressed="true"]{color:var(--opening);background:var(--ink);border-color:var(--ink)}
 .shelf-tab:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 
 /* ---------------------------------------------------------------- shelf --- */
@@ -214,17 +271,49 @@ body.loading #grid,body.loading .shelf-bar,body.loading #progress{display:none}
 .face canvas{width:240px;height:auto;image-rendering:pixelated}
 .stem{font-size:15px;font-weight:600;line-height:1.35;margin:8px 0 0;text-align:center;text-wrap:balance;overflow-wrap:anywhere}
 /* The fine print under a real label: product code and region. */
-.print{margin:0;text-align:center;font:12px/1.3 var(--mono);color:var(--muted)}
-.print:empty{display:none}
 /* Only while a cart has no face to show: being read, being looked up, or an error. */
 .game{margin:0;color:var(--muted);font-size:13px;text-align:center;overflow-wrap:anywhere}
 .game:empty{display:none}
 
-/* As wide as the shelf above it, rule and all, so the page ends on the same edges it runs on. */
-.credits{margin-top:56px;padding-top:20px;border-top:1px solid var(--rule);color:var(--muted);font-size:14px;line-height:1.6;text-align:center}
-.credits p{margin:0 0 10px}
-.credits a{color:var(--muted)}
-.credits a:hover{color:var(--ink)}
+body{display:flex;flex-direction:column;min-height:100dvh}
+.wrap{flex:1 0 auto;width:100%}
+.site-foot{margin-top:52px;color:#d9dae2}
+:root{
+  --slot-bar:url(assets/footer-slot.png) center top no-repeat,linear-gradient(to bottom,rgba(255,255,255,.318) 0px,rgba(255,255,255,.283) 1px,rgba(255,255,255,.217) 2px,rgba(255,255,255,.151) 3px,rgba(255,255,255,.101) 4px,rgba(255,255,255,.071) 5px,rgba(255,255,255,.044) 6px,rgba(255,255,255,.036) 7px,rgba(255,255,255,.029) 8px,rgba(255,255,255,.026) 9px,rgba(255,255,255,.02) 10px,rgba(255,255,255,.018) 11px,rgba(255,255,255,.009) 12px,rgba(255,255,255,0) 13px) left top/100% 13px no-repeat;
+}
+.foot-meta{position:relative;background:var(--recess) url(assets/footer-plastic.png) repeat}
+.foot-meta::before{
+  content:"";
+  display:block;
+  position:relative;
+  z-index:0;
+  height:58px;
+  background:var(--slot-bar);
+}
+.foot-meta::after{
+  content:"";
+  position:absolute;
+  top:0;
+  right:0;
+  left:0;
+  z-index:2;
+  height:58px;
+  background:url(assets/footer-slot-front.png) center top no-repeat;
+  pointer-events:none;
+}
+.site-foot a{color:#d9dae2;text-decoration:none;transition:color .15s}
+.site-foot a:hover,.site-foot a:focus-visible{color:var(--ink)}
+.foot-credits{position:relative;z-index:3;display:flex;justify-content:space-between;gap:4px 24px;margin-top:-46px;padding:0 24px 14px;color:var(--muted);font-size:13px;line-height:1.6}
+.foot-credits > :last-child{text-align:right}
+.foot-credits p{margin:0}
+@media (max-width:1060px){
+  .foot-credits{margin-top:0;padding-top:12px}
+}
+.foot-credits a{text-decoration:underline;text-underline-offset:2px}
+@media (max-width:880px){
+  .foot-credits{flex-direction:column;align-items:center;padding:14px 16px 18px;text-align:center}
+  .foot-credits > :last-child{text-align:center}
+}
 
 /* --------------------------------------------------------------- editor --- */
 
@@ -252,9 +341,12 @@ body.editing .cart:not(.current){opacity:.45}
   box-shadow:inset 1px 0 0 #3c3c45,-10px 0 28px rgba(0,0,0,.35);
 }
 .editor:focus{outline:none}
-.ed-head{display:flex;align-items:center;gap:8px}
-.ed-head h2{flex:1;min-width:0;margin:0;font-size:16px;font-weight:600;line-height:1.3;text-align:center;overflow-wrap:anywhere}
-.ed-icon{width:36px;height:36px;padding:0;display:grid;place-items:center;flex:none}
+.ed-head{position:sticky;top:-18px;z-index:2;display:flex;align-items:center;gap:12px;margin:-18px -18px 0;padding:16px 18px 14px;background:linear-gradient(90deg,#27272d,var(--housing));border-bottom:1px solid #1a1a1e;box-shadow:0 1px 0 #34343c}
+.ed-head h2{flex:1;min-width:0;margin:0;font-size:18px;font-weight:700;letter-spacing:-.01em;line-height:1.25;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ed-close{flex:none;display:grid;place-items:center;width:32px;height:32px;margin-right:-6px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer;transition:background .12s,color .12s}
+.ed-close svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+.ed-close:hover{background:rgba(255,255,255,.07);color:var(--ink)}
+.ed-close:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 /* The large cart sits in a deeper bay, like the SP's own cart slot. */
 .ed-face{display:block;width:100%;max-width:360px;height:auto;margin:0 auto;padding:10px;border-radius:8px;background:var(--recess);box-shadow:inset 0 3px 9px rgba(0,0,0,.85),inset 0 -1px 0 #2d2d34;image-rendering:pixelated}
 .props{display:flex;flex-direction:column;gap:12px}
@@ -295,6 +387,12 @@ body.editing .cart:not(.current){opacity:.45}
 .pick:focus-within{outline:2px solid var(--ink);outline-offset:3px}
 .ed-foot{display:flex;justify-content:space-between;gap:8px;margin-top:auto;padding-top:14px;border-top:1px solid #1a1a1e;box-shadow:inset 0 1px 0 #34343c}
 .ed-history{display:flex;gap:8px}
+.ed-label>.k{display:block;margin-bottom:8px;color:var(--muted);font-size:14px}
+.ed-info{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:auto 0 0;padding:12px 14px;border-radius:8px;background:var(--recess);box-shadow:inset 0 2px 6px rgba(0,0,0,.6),inset 0 -1px 0 #2d2d34;font-size:13px}
+.ed-info:empty{display:none}
+.ed-info dt{color:var(--muted)}
+.ed-info dd{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+.ed-info+.ed-foot{margin-top:0}
 .tip{position:fixed;z-index:50;padding:4px 8px;border-radius:4px;background:var(--ink);color:var(--opening);font-size:13px;font-weight:600;white-space:nowrap;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.5)}
 @media (min-width:721px){
   .ed-face{display:none}
@@ -304,7 +402,6 @@ body.editing .cart:not(.current){opacity:.45}
   body.editing .mast{margin-right:0}
   .editor{left:0;width:auto;box-shadow:none}
 }
-.ed-label>.k{display:block;margin-bottom:8px;color:var(--muted);font-size:14px}
 .tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .tile{position:relative;display:flex;flex-direction:column;gap:5px;padding:6px;border:2px solid transparent;border-radius:7px;background:var(--recess);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
 .tile.wide{grid-column:1/-1}

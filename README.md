@@ -26,7 +26,7 @@ wasm-pack build --release --target web --no-typescript --out-dir web/pkg
 cp LICENSE web/LICENSE
 ```
 
-Logo lookup uses the CORS-enabled libretro sources by default where available. Missing label/logo choices open a local PNG picker; explicit single-cart choices do not silently switch styles. An optional scanned-label collection can be selected with `?art=https://your-art-host/`; that host must allow the Studio origin through CORS.
+Studio loads scanned labels and logos from the site’s own `studio/art/` collection. The site build mirrors the public catalog at `https://art.slot-cfw.fyi/`, preserving image dimensions and transparency while optimizing PNG storage. This avoids the upstream host’s cross-origin restriction. Libretro remains a logo fallback where available. Missing label/logo choices open a local PNG picker; explicit single-cart choices do not silently switch styles. Another scanned-label collection can be selected with `?art=https://your-art-host/`; that host must allow the Studio origin through CORS.
 
 The web theme uses the self-hosted Google Sans Flex from the slot.sp website. See the renderer's font licenses for its preview text.
 
@@ -40,4 +40,4 @@ Game Boy is a trademark of Nintendo. This project is not affiliated with Nintend
 
 ### Style several cartridges
 
-Choose **Select carts**, pick any cartridges (across system tabs if needed), then choose a shell color, finish, or both. **Select this system** selects the current tab. **Apply to selected** preserves each cartridge's outline and label, and each cart's editor can undo its change. Write to card or export the ZIP when ready.
+Choose **Select carts**, pick any cartridges (across system tabs if needed), then choose Label or Logo artwork, a shell color, finish, or any combination. The selected carts update as soon as an option changes. **Select this system** selects the current tab. The Select carts switch shows On while selecting; turn it off or choose Done to edit one cart again. Shell changes preserve artwork and outlines. Missing downloadable artwork keeps the previous label, with a count shown in the selection panel. Each cart’s editor can undo its change. Write to card or export the ZIP when ready.

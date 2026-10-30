@@ -19,6 +19,12 @@ const server = http.createServer((req,res) => {
  try {
   const page=await browser.newPage({viewport:{width:1440,height:1000},acceptDownloads:true});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  let catalogRequests=0;
+  await page.route('**/art/**', async route=>{
+   if(route.request().url().endsWith('/index.json')){catalogRequests++;return route.fulfill({status:200,json:{[metadata.crc]:{'support-texture':'fixture/label.png',wheel:'fixture/logo.png'}}});}
+   const image=route.request().url().endsWith('logo.png')?'logo.png':'GBA-scan.png';
+   return route.fulfill({status:200,body:fs.readFileSync(path.join(fixtures,image)),contentType:'image/png'});
+  });
   await page.route('https://raw.githubusercontent.com/**', async route=>{
    const url=route.request().url();
    if(url.endsWith('.dat'))return route.fulfill({status:200,body:`game (\n name "Renderer Probe (USA)"\n rom ( name "Renderer Probe.gba" crc ${metadata.crc} )\n)`,contentType:'text/plain'});
@@ -26,16 +32,27 @@ const server = http.createServer((req,res) => {
    return route.fulfill({status:404,body:''});
   });
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.locator('body[data-ready=true]').waitFor();
+  if(!catalogRequests)throw Error('Scanned artwork catalog was not requested by default');
+  await page.locator('#start').click();
   await page.locator('#pick-files-label').waitFor({state:'visible'});
   await page.locator('#pick-files').setInputFiles(path.join(fixtures,'card'));
   await page.locator('.cart .face').first().click();
   await page.locator('#editor').waitFor({state:'visible'});
+  const finish=page.locator('#ed-finish [data-value="clear"]');
+  if(!(await finish.isEnabled()))throw Error('Finish requires a color change on an automatic shell');
+  await finish.click();
+  await page.waitForFunction(()=>window.__studio.shells()[0].shell.endsWith(' clear'));
+  const real=page.locator('#ed-tiles [data-kind="real"]');
+  await real.click();
+  await page.waitForFunction(()=>window.__studio.states()[0].wears==='real' && window.__studio.idle());
+  await page.screenshot({path:path.join(fixtures,'studio-downloaded-label.png'),fullPage:true});
   const logo=page.locator('#ed-tiles [data-kind="logo"]');
   await logo.click();
   if(await logo.getAttribute('aria-pressed')!=='true')throw Error('Logo Only did not remain selected');
   await page.screenshot({path:path.join(fixtures,'studio-logo.png'),fullPage:true});
   const chooser=page.waitForEvent('filechooser');
-  await page.locator('#ed-tiles [data-kind="real"]').click();
+  await page.locator('#ed-tiles [data-kind="customLabel"]').click();
   await (await chooser).setFiles(path.join(fixtures,'GBA-scan.png'));
   await page.locator('#ed-tiles [data-kind="customLabel"][aria-pressed="true"]').waitFor();
   await page.screenshot({path:path.join(fixtures,'studio-label.png'),fullPage:true});
@@ -43,6 +60,7 @@ const server = http.createServer((req,res) => {
   const downloaded=page.waitForEvent('download');
   await page.locator('#write').click();
   await (await downloaded).saveAs(path.join(fixtures,'labels.zip'));
+  await page.locator('#guide-done').click();
   // Bulk selection spans system tabs, preserves labels, and writes only chosen shells.
   const card = path.join(fixtures, 'card');
   for (const [platform, name, extension] of [['GBA','Style Second','gba'],['GB','Style GB','gb']]) {
@@ -54,26 +72,44 @@ const server = http.createServer((req,res) => {
   await page.locator('#pick-files').setInputFiles(card);
   await page.locator('.cart[data-state="has-label"]').nth(2).waitFor({state:'attached'});
   await page.locator('#bulk-open').click();
+  if(await page.locator('#bulk-open').getAttribute('aria-checked')!=='true')throw Error('Selection switch did not turn on');
   await page.getByRole('button',{name:'Select Renderer Probe',exact:true}).click();
   await page.locator('#tabs button').last().click();
   await page.getByRole('button',{name:'Select Style GB',exact:true}).focus();
   await page.keyboard.press('Space');
   await page.locator('#bulk-colour-mode').selectOption('custom');
   await page.locator('#bulk-colour').fill('#123456');
+  await page.waitForFunction(()=>window.__studio.shells().filter(c=>c.stem!=='Style Second').every(c=>c.shell.includes(' 123456 ')));
   await page.locator('#bulk-finish').selectOption('clear');
-  await page.locator('#bulk-apply').click();
-  if(!(await page.locator('#bulk-status').textContent()).startsWith('Updated 2 carts'))throw Error('Bulk selection did not span tabs');
+  await page.waitForFunction(()=>window.__studio.shells().filter(c=>c.stem!=='Style Second').every(c=>c.shell==='auto 123456 clear'));
+  if((await page.locator('#bulk-count').textContent())!=='2 carts selected')throw Error('Bulk selection did not span tabs');
+  await page.locator('#bulk-artwork').selectOption('real');
+  await page.waitForFunction(()=>window.__studio.idle() && window.__studio.states().find(c=>c.stem==='Renderer Probe').wears==='real');
+  if(!(await page.locator('#bulk-status').textContent()).includes('artwork was kept'))throw Error('Missing label did not preserve existing artwork');
   await page.screenshot({path:path.join(fixtures,'studio-bulk.png'),fullPage:true});
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:path.join(fixtures,'studio-bulk-mobile.png'),fullPage:true});
   if(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth))throw Error('Bulk controls overflow mobile viewport');
+  await page.locator('#bulk-open').click();
+  if(await page.locator('#bulk-open').getAttribute('aria-checked')!=='false')throw Error('Selection switch did not turn off');
+  if(await page.locator('#bulk-panel').isVisible())throw Error('Selection panel stayed open');
+  await page.locator('#bulk-open').click();
   await page.locator('#bulk-done').click();
+  if(await page.locator('#bulk-open').getAttribute('aria-checked')!=='false')throw Error('Done did not turn selection off');
   const bulkDownload=page.waitForEvent('download');
   await page.locator('#write').click();
   const bulkPath=path.join(fixtures,'bulk-labels.zip');
   await (await bulkDownload).saveAs(bulkPath);
   const bulk=fs.readFileSync(bulkPath).toString('latin1');
   if(!bulk.includes('Renderer Probe = auto 123456 clear')||!bulk.includes('Style GB = auto 123456 clear')||bulk.includes('Style Second ='))throw Error('Bulk export changed the wrong carts or missed selected shells');
+  // The smoke mirror contains real public scans downloaded by the build. Read it
+  // through our own origin, exactly as the published site will serve it.
+  const live=await browser.newPage();
+  const origin=`http://127.0.0.1:${server.address().port}`;
+  await live.route(`${origin}/art-probe`,r=>r.fulfill({contentType:'text/html',body:'<!doctype html><title>Artwork source probe</title>'}));
+  await live.goto(`${origin}/art-probe`);
+  const source=await live.evaluate(async()=>{const r=await fetch('art/index.json');if(!r.ok)throw Error(`catalog HTTP ${r.status}`);const data=await r.json();const entry=Object.values(data).find(e=>e['support-texture']);if(!entry)throw Error('no scanned labels');const image=await fetch(new URL('art/'+entry['support-texture'],location.href));if(!image.ok)throw Error(`scan HTTP ${image.status}`);const bytes=new Uint8Array(await image.arrayBuffer());if(bytes[0]!==137||bytes[1]!==80)throw Error('not PNG');return {labels:Object.keys(data).length,bytes:bytes.length};});
+  console.log('Same-origin scanned-label source:',source);await live.close();
   if(errors.length)throw Error(errors.join('\n'));
   console.log('PASS: artwork choices, native previews, bulk selection across tabs, mobile layout and ZIP exports');
  }finally{await browser.close();server.close();}
