@@ -68,7 +68,7 @@ def mirror(target, raw, sample=0):
     missing = [name for name in paths if not (target / name).is_file()]
     if missing: raise ValueError(f'Missing mirrored images: {missing[:3]}')
     size = sum((target / name).stat().st_size for name in paths)
-    if size > 750 * 1024 * 1024:
+    if size > 850 * 1024 * 1024:
         raise ValueError(f'Artwork exceeds the static-site size budget: {size} bytes')
     # Publish the index only once every image is present; a partial set never deploys.
     (target / 'index.json').write_text(json.dumps(catalog, separators=(',', ':')) + '\n')
