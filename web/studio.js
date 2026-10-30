@@ -34,6 +34,7 @@ import { smallPrint } from './smallprint.js';
 import { hasLog, logError, logText } from './log.js';
 import { applyFill, autoFill, available, fillCounts, fillText, wears } from './label-choice.js';
 import { extrasFrom } from './extras.js';
+import { fingerprintCache, fingerprintKey, readFingerprint, scanLimited } from './scan.js';
 import { heroPicks, heroShell } from './hero.js';
 
 const $ = (id) => document.getElementById(id);
@@ -51,6 +52,18 @@ const boxOf = (platform) => faceBox.get(platform) ?? faceBox.get('GBA');
 // One parsed No-Intro database per platform, kept across cards: the databases are large and a
 // second card of the same platform should not fetch one again.
 const dats = new Map();
+const fingerprints = fingerprintCache();
+const scanStats = { reads: 0, cached: 0, previews: 0 };
+const visibleCarts = new WeakMap();
+const visibility = new IntersectionObserver(entries => {
+  for (const entry of entries) {
+    const cart = visibleCarts.get(entry.target);
+    if (!cart) continue;
+    cart.onScreen = entry.isIntersecting;
+    if (cart.onScreen) schedulePaint(cart);
+    else cart.existing=null;
+  }
+}, {rootMargin: '180px'});
 let session = null;
 let busy = 0;
 let writing = false;
@@ -104,6 +117,7 @@ function newCart({ platform, stem, file }) {
     error: null,
     result: null,
     looking: true,
+    onScreen: false,
     el: null,
   };
 }
@@ -224,7 +238,10 @@ const withCartLabel = (c, use) => withKindLabel(c, wearing(c).kind, use);
 const BLANK = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAD0lEQVR4nGO0snJiYGAAAAOUALgNWObMAAAAAElFTkSuQmCC'), (ch) => ch.charCodeAt(0));
 
 function faceFor(c, kind) {
-  if (kind === 'card') return c.existing;
+  if (kind === 'card') {
+    if (!c.existing && c.existingPng) {scanStats.previews++;c.existing=existing_face(c.existingPng,c.platform,c.code,c.head,c.shell,c.stem);}
+    return c.existing;
+  }
   if (kind === 'none') return existing_face(new Uint8Array(0), c.platform, c.code, c.head, c.shell, c.stem);
   if (kind === 'unfilled') {
     const label = Label.full(BLANK, c.platform);
@@ -283,6 +300,7 @@ function buildCard(c) {
   const root = $('card-tpl').content.firstElementChild.cloneNode(true);
   const q = (selector) => root.querySelector(selector);
   c.el = { root, canvas: q('canvas'), face: q('.face'), stem: q('.stem'), game: q('.game') };
+  visibleCarts.set(root,c);visibility.observe(root);
   const [boxW, boxH] = boxOf(c.platform);
   c.el.canvas.width = boxW;
   c.el.canvas.height = boxH;
@@ -383,13 +401,12 @@ function paint(c) {
   root.dataset.state = state;
   let face;
   try {
-    face = faceOf(c, state);
+    face = c.onScreen ? faceOf(c, state) : null;
   } catch (e) {
     if (trapped(e)) return;
     throw e;
   }
-  canvas.hidden = !face;
-  if (face) drawFace(canvas, face, c.platform);
+  if (c.onScreen) {canvas.hidden = !face;if (face) drawFace(canvas, face, c.platform);}
   game.textContent = describe(c, state);
   updateWriteBar();
   updateBulk(false);
@@ -509,8 +526,8 @@ async function takeLogo(c, file) {
   if (bytes && commit(c, () => useCustomLogo(c, bytes))) changed(c);
 }
 
-const FILL_MS = 2600;
-const HOLD_MS = 450;
+const FILL_MS = 350;
+const HOLD_MS = 100;
 const meter = { start: 0, target: 0, frame: 0 };
 const shown = () => Math.min(meter.target, (performance.now() - meter.start) / FILL_MS);
 
@@ -584,6 +601,7 @@ async function open(source) {
     return;
   }
   editor.close();
+  visibility.disconnect();
   selecting = false;
   selectedCarts.clear();
   bulkArtworkRevision++;
@@ -608,14 +626,14 @@ async function open(source) {
   track(identify(session));
 }
 
-async function crcOf(file) {
-  const crc = new Crc32();
-  const reader = file.stream().getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) return crc.finish();
-    crc.update(value);
-  }
+async function crcOf(file, c, progress = () => {}) {
+  const s=session;
+  const result=await readFingerprint(file,()=>new Crc32(),fingerprints,
+    fingerprintKey(file,`${c.platform}/${c.stem}`,c.head.length?c.head:[...c.code].map(s=>s.charCodeAt(0))),
+    read=>progress(Math.min(1,read/Math.max(1,file.size))),()=>s===session&&!fatal);
+  if(!result)return null;
+  scanStats[result.cached?'cached':'reads']++;
+  return result.crc;
 }
 
 async function identify(s) {
@@ -645,9 +663,12 @@ async function identify(s) {
   for (const c of s.carts) c.shell = c.shellOnCard = chosen.get(c.stem.normalize('NFC')) ?? '';
 
   const total = s.carts.length;
-  for (const [i, c] of s.carts.entries()) {
+  let completed=0;
+  const fractions=new Map();
+  await scanLimited(s.carts,2,async c=>{
     if (s !== session || fatal) return;
-    progress(i, total, c.stem);
+    const report=fraction=>{fractions.set(c,fraction);progress(completed,total,c.stem);loading(true,(completed+[...fractions.values()].reduce((a,b)=>a+b,0))/total*READ_SHARE);};
+    report(0);
     try {
       const file = await c.file();
       const head = new Uint8Array(await file.slice(0, HEAD).arrayBuffer());
@@ -660,24 +681,27 @@ async function identify(s) {
         const bytes = new Uint8Array(await (await label()).arrayBuffer());
         c.existingPng = bytes;
         c.choice = 'card';
-        c.existing = existing_face(bytes, c.platform, c.code, c.head, c.shell, c.stem);
+        c.existing = null;
         c.looking = false;
       } else {
-        c.crc = await crcOf(file);
+        c.crc = await crcOf(file,c,report);
       }
     } catch (e) {
       if (trapped(e)) return;
       c.error = `Could not read this ROM: ${e.message}`;
     }
+    if(s!==session||fatal)return;
+    fractions.delete(c);completed++;
     paint(c);
-  }
+    progress(completed,total,c.stem);
+  },()=>s===session&&!fatal);
   // A card opened during the last read has its own bar up by now.
   if (s !== session) return;
   progress(total, total, '');
-  loading(true, 0.95);
+  await loaded(s);
+  if (s !== session) return;
   await match(s);
   if (s !== session) return;
-  await loaded(s);
   await fill(s);
 }
 
@@ -792,7 +816,7 @@ async function dress(s, c) {
   };
   // The ground's colour is read off the box art, so that request starts now and is waited on
   // after the logo.
-  const boxJob = thumb('Named_Boxarts');
+  const boxJob = c.look ? Promise.resolve(null) : thumb('Named_Boxarts');
   if (!c.logoBytes) {
     const logo = (await ours('wheel')) ?? (await thumb('Named_Logos'));
     if (s !== session || fatal) return;
@@ -1261,7 +1285,7 @@ function shellOf(c) {
 async function lookUp(s, c) {
   paint(c);
   try {
-    if (c.crc === null) c.crc = await crcOf(await c.file());
+    if (c.crc === null) c.crc = await crcOf(await c.file(),c);
     if (!dats.has(c.platform)) dats.set(c.platform, Dat.parse(await fetchDat(c.platform)));
     if (s !== session || fatal) return;
     nameGame(c);
@@ -1295,7 +1319,7 @@ function noMatch(c) {
 // follow-on inputs wait for a frame.
 function changed(c, soon = false) {
   try {
-    if (c.existingPng) c.existing = existing_face(c.existingPng, c.platform, c.code, c.head, c.shell, c.stem);
+    if (c.existingPng) c.existing = null;
   } catch (e) {
     if (trapped(e)) return;
     throw e;
@@ -1480,6 +1504,7 @@ async function start() {
       shellPresets: () => shell_presets(),
       editing: () => editor.current()?.stem ?? null,
       artBase: () => ART_BASE,
+      scanStats: () => ({...scanStats}),
       fill: () => session?.fill ?? null,
     };
   }

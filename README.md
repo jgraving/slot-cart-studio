@@ -41,3 +41,7 @@ Game Boy is a trademark of Nintendo. This project is not affiliated with Nintend
 ### Style several cartridges
 
 Choose **Select carts**, pick any cartridges (across system tabs if needed), then choose Label or Logo artwork, a shell color, finish, or any combination. The selected carts update as soon as an option changes. **Select this system** selects the current tab. The Select carts switch shows On while selecting; turn it off or choose Done to edit one cart again. Shell changes preserve artwork and outlines. Missing downloadable artwork keeps the previous label, with a count shown in the selection panel. Each cart’s editor can undo its change. Write to card or export the ZIP when ready.
+
+### Reading a card
+
+The upstream progress meter is retained. Studio reads at most two games at once, updates progress during checksum reads, and renders cartridge previews as they approach the viewport. The card appears before background artwork matching finishes. Unchanged games reuse a checksum cached in browser-local IndexedDB, keyed by system/name, size, modification time and header. Only metadata and checksums are cached; game bytes are never stored or uploaded. Clearing or blocking browser storage simply causes another read. Large first-time libraries still need their ROM bytes read to identify exact releases.
