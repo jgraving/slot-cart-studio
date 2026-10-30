@@ -46,6 +46,8 @@ const server = http.createServer((req,res) => {
   await page.locator('body.loading').waitFor({state:'hidden'});
   await page.locator('.cart .face').first().click();
   await page.locator('#editor').waitFor({state:'visible'});
+  // Opening an existing label starts its background lookup; it must finish before styling.
+  await page.waitForFunction(()=>window.__studio.idle());
   const finish=page.locator('#ed-finish [data-value="clear"]');
   if(!(await finish.isEnabled()))throw Error('Finish requires a color change on an automatic shell');
   await finish.click();
