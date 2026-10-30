@@ -26,7 +26,7 @@ wasm-pack build --release --target web --no-typescript --out-dir web/pkg
 cp LICENSE web/LICENSE
 ```
 
-Studio downloads the published checksum catalog at `https://art.slot-cfw.fyi/` by default, including scanned labels and logos. Libretro remains a logo fallback where available. Missing label/logo choices open a local PNG picker; explicit single-cart choices do not silently switch styles. Another scanned-label collection can be selected with `?art=https://your-art-host/`; that host must allow the Studio origin through CORS.
+Studio loads scanned labels and logos from the site’s own `studio/art/` collection. The site build mirrors the public catalog at `https://art.slot-cfw.fyi/`, preserving image dimensions and transparency while optimizing PNG storage. This avoids the upstream host’s cross-origin restriction. Libretro remains a logo fallback where available. Missing label/logo choices open a local PNG picker; explicit single-cart choices do not silently switch styles. Another scanned-label collection can be selected with `?art=https://your-art-host/`; that host must allow the Studio origin through CORS.
 
 The web theme uses the self-hosted Google Sans Flex from the slot.sp website. See the renderer's font licenses for its preview text.
 

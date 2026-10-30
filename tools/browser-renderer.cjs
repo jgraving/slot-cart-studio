@@ -20,7 +20,7 @@ const server = http.createServer((req,res) => {
   const page=await browser.newPage({viewport:{width:1440,height:1000},acceptDownloads:true});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   let catalogRequests=0;
-  await page.route('https://art.slot-cfw.fyi/**', async route=>{
+  await page.route('**/art/**', async route=>{
    if(route.request().url().endsWith('/index.json')){catalogRequests++;return route.fulfill({status:200,json:{[metadata.crc]:{'support-texture':'fixture/label.png',wheel:'fixture/logo.png'}}});}
    const image=route.request().url().endsWith('logo.png')?'logo.png':'GBA-scan.png';
    return route.fulfill({status:200,body:fs.readFileSync(path.join(fixtures,image)),contentType:'image/png'});
@@ -102,12 +102,14 @@ const server = http.createServer((req,res) => {
   await (await bulkDownload).saveAs(bulkPath);
   const bulk=fs.readFileSync(bulkPath).toString('latin1');
   if(!bulk.includes('Renderer Probe = auto 123456 clear')||!bulk.includes('Style GB = auto 123456 clear')||bulk.includes('Style Second ='))throw Error('Bulk export changed the wrong carts or missed selected shells');
-  // Verify the live source is readable from the published fork's origin, not just fixtures.
+  // The smoke mirror contains real public scans downloaded by the build. Read it
+  // through our own origin, exactly as the published site will serve it.
   const live=await browser.newPage();
-  await live.route('https://jakegraving.com/slot.sp/studio/art-probe',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><title>Artwork source probe</title>'}));
-  await live.goto('https://jakegraving.com/slot.sp/studio/art-probe');
-  const source=await live.evaluate(async()=>{try{const r=await fetch('https://art.slot-cfw.fyi/index.json');if(!r.ok)throw Error(`catalog HTTP ${r.status}`);const data=await r.json();const entry=Object.values(data).find(e=>e['support-texture']);if(!entry)throw Error('no scanned labels');const image=await fetch(new URL(entry['support-texture'],'https://art.slot-cfw.fyi/'));if(!image.ok)throw Error(`scan HTTP ${image.status}`);const bytes=new Uint8Array(await image.arrayBuffer());if(bytes[0]!==137||bytes[1]!==80)throw Error('not PNG');return {labels:Object.values(data).filter(e=>e['support-texture']).length,bytes:bytes.length};}catch(e){return {error:e.message}}});
-  if(source.error)throw Error(`Published artwork source: ${source.error}`);console.log('Live scanned-label source:',source);await live.close();
+  const origin=`http://127.0.0.1:${server.address().port}`;
+  await live.route(`${origin}/art-probe`,r=>r.fulfill({contentType:'text/html',body:'<!doctype html><title>Artwork source probe</title>'}));
+  await live.goto(`${origin}/art-probe`);
+  const source=await live.evaluate(async()=>{const r=await fetch('art/index.json');if(!r.ok)throw Error(`catalog HTTP ${r.status}`);const data=await r.json();const entry=Object.values(data).find(e=>e['support-texture']);if(!entry)throw Error('no scanned labels');const image=await fetch(new URL('art/'+entry['support-texture'],location.href));if(!image.ok)throw Error(`scan HTTP ${image.status}`);const bytes=new Uint8Array(await image.arrayBuffer());if(bytes[0]!==137||bytes[1]!==80)throw Error('not PNG');return {labels:Object.keys(data).length,bytes:bytes.length};});
+  console.log('Same-origin scanned-label source:',source);await live.close();
   if(errors.length)throw Error(errors.join('\n'));
   console.log('PASS: artwork choices, native previews, bulk selection across tabs, mobile layout and ZIP exports');
  }finally{await browser.close();server.close();}

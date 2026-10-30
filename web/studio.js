@@ -153,7 +153,7 @@ const hex = (rgb) => `#${[...rgb].map((v) => v.toString(16).padStart(2, '0')).jo
 const crcHex = (crc) => crc.toString(16).toUpperCase().padStart(8, '0');
 // The published checksum catalog includes scanned labels and logos. ?art= remains
 // available for another CORS-enabled collection (or an empty value to opt out).
-const ART_BASE = new URLSearchParams(location.search).get('art') ?? 'https://art.slot-cfw.fyi/';
+const ART_BASE = new URLSearchParams(location.search).get('art') ?? new URL('art/', location.href).href;
 let artIndex = null;
 let ready = null;
 let extras = extrasFrom(null);
