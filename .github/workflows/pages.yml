@@ -47,6 +47,7 @@ jobs:
           cargo run --locked --example renderer_preview -- "$RUNNER_TEMP/studio-previews"
       - uses: actions/upload-artifact@v7
         with:
+          retention-days: 1
           name: cart-studio-previews
           path: ${{ runner.temp }}/studio-previews
           if-no-files-found: error
@@ -85,11 +86,13 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
+          retention-days: 1
           name: cart-studio-browser-review
           path: ${{ runner.temp }}/studio-previews
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
+          retention-days: 1
           name: cart-studio-web
           path: slot-cart-studio/web
           if-no-files-found: error
