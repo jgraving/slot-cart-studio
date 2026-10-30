@@ -82,7 +82,7 @@ const server = http.createServer((req,res) => {
   await page.waitForFunction(()=>window.__studio.shells().filter(c=>c.stem!=='Style Second').every(c=>c.shell.includes(' 123456 ')));
   await page.locator('#bulk-finish').selectOption('clear');
   await page.waitForFunction(()=>window.__studio.shells().filter(c=>c.stem!=='Style Second').every(c=>c.shell==='auto 123456 clear'));
-  if(!(await page.locator('#bulk-status').textContent()).startsWith('Updated 2 carts'))throw Error('Bulk selection did not span tabs');
+  if((await page.locator('#bulk-count').textContent())!=='2 carts selected')throw Error('Bulk selection did not span tabs');
   await page.locator('#bulk-artwork').selectOption('real');
   await page.waitForFunction(()=>window.__studio.idle() && window.__studio.states().find(c=>c.stem==='Renderer Probe').wears==='real');
   if(!(await page.locator('#bulk-status').textContent()).includes('artwork was kept'))throw Error('Missing label did not preserve existing artwork');
