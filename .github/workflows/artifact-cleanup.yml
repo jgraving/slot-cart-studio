@@ -11,6 +11,7 @@ on:
 
 permissions:
   actions: write
+  contents: read
 
 concurrency:
   group: keep-newest-actions-artifacts
@@ -26,28 +27,32 @@ jobs:
         with:
           script: |
             const repo = context.repo;
+            const directory = (await github.rest.repos.getContent({...repo, path: '.github/workflows'})).data;
+            if (!Array.isArray(directory)) throw new Error('Cannot verify current workflows');
+            const active = new Set(directory.filter(f => f.type === 'file' && /\.ya?ml$/.test(f.name)).map(f => f.path));
             const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {...repo, per_page: 100});
             const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {...repo, per_page: 100});
             const byRun = new Map(runs.map(r => [r.id, r]));
-            const groups = new Map();
+            const keep = new Map();
+            const pathOf = run => run.path.split('@')[0];
             for (const artifact of artifacts) {
               const run = byRun.get(artifact.workflow_run?.id);
-              if (!run) continue;
-              const key = JSON.stringify([run.workflow_id, artifact.name]);
-              if (!groups.has(key)) groups.set(key, []);
-              groups.get(key).push({artifact, run});
+              if (!run || artifact.expired || run.status !== 'completed' || run.conclusion !== 'success') continue;
+              const path = pathOf(run);
+              if (active.has(path) && (!keep.has(path) || run.id > keep.get(path))) keep.set(path, run.id);
             }
-            for (const entries of groups.values()) {
-              const good = entries.filter(({artifact, run}) =>
-                !artifact.expired && run.status === 'completed' && run.conclusion === 'success');
-              good.sort((a, b) => b.run.id - a.run.id || b.artifact.id - a.artifact.id);
-              if (!good.length) continue;
-              const keep = good[0].artifact;
-              core.info(`Keeping ${keep.name} (${keep.id})`);
-              for (const {artifact, run} of entries) {
-                if (artifact.id === keep.id || run.status !== 'completed') continue;
-                core.info(`Deleting superseded ${artifact.name} (${artifact.id})`);
-                await github.rest.actions.deleteArtifact({...repo, artifact_id: artifact.id});
-              }
+            if (!keep.size) throw new Error('No successful replacement sets found; refusing cleanup');
+            for (const [path, id] of keep) core.info(`Keeping newest successful set: ${path}, run ${id}`);
+            let deleted = 0;
+            for (const artifact of artifacts) {
+              const run = byRun.get(artifact.workflow_run?.id);
+              if (!run || run.status !== 'completed') continue;
+              const path = pathOf(run);
+              // Current workflows without a successful set are left alone.
+              if (active.has(path) && (!keep.has(path) || keep.get(path) === run.id)) continue;
+              core.info(`Deleting superseded artifact ${artifact.name} (${artifact.id}, run ${run.id})`);
+              await github.rest.actions.deleteArtifact({...repo, artifact_id: artifact.id});
+              deleted++;
             }
-
+            core.info(`Deleted ${deleted} artifacts`);
+            
