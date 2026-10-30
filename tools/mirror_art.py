@@ -16,7 +16,7 @@ VERSION = 1
 MEDIA = ('support-texture', 'wheel')
 
 def download(url):
-    return subprocess.check_output(['curl','--fail','--silent','--show-error','--location','--retry','3','--max-time','45',url])
+    return subprocess.check_output(['curl','--fail','--silent','--show-error','--location','--retry-all-errors','--retry','8','--retry-delay','1','--retry-max-time','180','--connect-timeout','15','--max-time','45',url])
 
 def art_paths(index):
     paths = set()
