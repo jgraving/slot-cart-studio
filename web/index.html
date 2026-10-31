@@ -59,11 +59,18 @@
 
 
   <div class="shelf-bar">
+    <div class="cart-search" id="cart-search" role="search" hidden>
+      <label for="cart-query">Find a game</label>
+      <div class="cart-search-field"><input id="cart-query" type="search" placeholder="Search all games…" autocomplete="off" aria-controls="grid" aria-describedby="cart-search-count"><button class="key dark" id="cart-search-clear" type="button" hidden>Clear</button></div>
+      <span id="cart-search-count" role="status" aria-live="polite"></span>
+    </div>
     <nav class="shelf-tabs" id="tabs" aria-label="Platforms" hidden></nav>
     <button class="selection-switch" id="bulk-open" type="button" role="switch" aria-checked="false" aria-controls="bulk-panel" hidden><span class="switch-track" aria-hidden="true"></span>Select carts <span id="bulk-mode" aria-hidden="true">Off</span></button>
     <button class="btn ghost how-shelf" id="how-shelf" type="button" hidden>How It Works</button>
     <button class="key dark fill-open" id="fill-open" type="button" hidden>Fill unlabelled carts…</button>
     <div class="write-bar" id="write-bar" hidden>
+      <span id="write-confirmation" class="write-confirmation" role="status" hidden></span>
+      <button class="key dark" id="card-done" type="button" hidden>Done</button>
       <span class="eject" id="eject" role="status" hidden>Eject the card before you take it out, or slot may not find your games.</span>
       <button class="btn" id="write" type="button" disabled>Write to card</button>
     </div>
@@ -82,6 +89,7 @@
     <p id="bulk-status" role="status">Changes stay in Studio until you write to the card or export.</p>
   </section>
 
+  <p id="cart-search-empty" hidden>No games found. Try another title or clear your search.</p>
   <section class="grid" id="grid" aria-label="Carts"></section>
 </main>
 <footer class="site-foot">

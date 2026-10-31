@@ -82,6 +82,15 @@ const server = http.createServer((req,res) => {
   }
   await page.locator('#pick-files').setInputFiles(card);
   await page.locator('.cart[data-state="has-label"]').nth(2).waitFor({state:'attached'});
+  await page.locator('#cart-query').fill('style gb');
+  await page.waitForFunction(()=>[...document.querySelectorAll('#grid .cart')].filter(c=>!c.hidden).length===1);
+  if(!(await page.getByRole('button',{name:'Edit Style GB',exact:true}).isVisible()))throw Error('Search did not find a game in another system');
+  if(!(await page.locator('#cart-search-count').textContent()).includes('1 of 3'))throw Error('Search result count is wrong');
+  await page.locator('#cart-query').fill('no such game anywhere');
+  await page.locator('#cart-search-empty').waitFor({state:'visible'});
+  await page.locator('#cart-search-clear').click();
+  if(await page.locator('#cart-search-empty').isVisible())throw Error('Clear did not restore the shelf');
+  if(await page.getByRole('button',{name:'Edit Style GB',exact:true}).isVisible())throw Error('Clear did not restore the current system');
   await page.locator('#bulk-open').click();
   if(await page.locator('#bulk-open').getAttribute('aria-checked')!=='true')throw Error('Selection switch did not turn on');
   await page.getByRole('button',{name:'Select Renderer Probe',exact:true}).click();
@@ -170,6 +179,37 @@ const server = http.createServer((req,res) => {
   await page.locator('#ed-suggestion').waitFor({state:'visible'});
   await page.locator('#ed-suggestion-dismiss').click();
   if(await page.locator('#ed-suggestion').isVisible())throw Error('Rejected suggestion remained visible');
+  await page.locator('#cart-query').fill('Renderer Probe');
+  await page.waitForFunction(()=>[...document.querySelectorAll('#grid .cart')].filter(c=>!c.hidden).length===2);
+  if(!(await page.getByRole('button',{name:'Edit AAA Matched',exact:true}).isVisible()))throw Error('Search did not find the matched game title');
+  await page.locator('#cart-query').press('Escape');
+  if(await page.locator('#cart-query').inputValue())throw Error('Escape did not clear search');
+  // Use the browser's real private filesystem to exercise direct SD-card writes.
+  await page.locator('#ed-close').click();
+  await page.evaluate(async ({rom,png})=>{
+   const fs=await navigator.storage.getDirectory();
+   try{await fs.removeEntry('direct-write-probe',{recursive:true});}catch{}
+   const root=await fs.getDirectoryHandle('direct-write-probe',{create:true});
+   async function put(folder,name,bytes){const parent=await root.getDirectoryHandle(folder,{create:true});const dir=await parent.getDirectoryHandle('GBA',{create:true});const file=await dir.getFileHandle(name,{create:true});const out=await file.createWritable();await out.write(new Uint8Array(bytes));await out.close();}
+   await put('Games','Direct.gba',rom);await put('Labels','Direct.png',png);
+   await window.__studio.openDirectory(root);
+  },{rom:[...rom],png:[...fs.readFileSync(path.join(fixtures,'GBA-scan.png'))]});
+  await page.getByRole('button',{name:'Edit Direct',exact:true}).click();
+  await page.waitForFunction(()=>window.__studio.idle());
+  await page.locator('#ed-tiles [data-kind="real"]').click();
+  await page.waitForFunction(()=>window.__studio.idle() && window.__studio.states()[0].wears==='real');
+  await page.locator('#write').click();
+  await page.locator('#write-confirmation').waitFor({state:'visible'});
+  if(!(await page.locator('#write-confirmation').textContent()).includes('Saved to SD card: 1 label'))throw Error('Direct write has no saved confirmation');
+  if(!(await page.locator('#write').isVisible())||!(await page.locator('#write').isDisabled()))throw Error('Saved write button disappeared or remained active');
+  await page.locator('#ed-tiles [data-kind="logo"]').click();
+  if(await page.locator('#card-done').isVisible())throw Error('Done could discard new edits');
+  await page.locator('#write').click();
+  await page.locator('#card-done').waitFor({state:'visible'});
+  await page.locator('#card-done').click();
+  if(await page.locator('#grid .cart').count())throw Error('Done did not close the card');
+  if(!(await page.locator('#start').isVisible()))throw Error('Done did not return to the start');
+  if(!(await page.locator('#banner').textContent()).includes('Eject the SD card'))throw Error('Done lost the eject reminder');
   // The smoke mirror contains real public scans downloaded by the build. Read it
   // through our own origin, exactly as the published site will serve it.
   const live=await browser.newPage();

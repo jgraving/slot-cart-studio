@@ -25,6 +25,7 @@ import init, {
   stub_target,
   thumbnail_name,
 } from './pkg/slot_cart_studio.js';
+import { cartMatches } from './cart-search.js';
 import { suggestName, titleWords, reviewRank } from './match-review.js';
 import { LoadProgress } from './load-progress.js';
 import { fromDirectory, fromFiles, labelKey, PLATFORMS } from './card.js';
@@ -603,6 +604,7 @@ function showArtworkProgress(s) {
     clearInterval(w.timer); w.timer = null;
     $('progress').hidden = true;
     updateFillButton();
+    updateWriteBar();
     return;
   }
   const done = w.matching ? w.done : w.labelsDone;
@@ -661,8 +663,12 @@ async function open(source) {
   loading(false);
   if (session?.artworkWork) clearInterval(session.artworkWork.timer);
   session = { source, carts: source.carts.map(newCart) };
+  $('cart-query').value = '';
+  $('cart-search').hidden = session.carts.length === 0;
   $('banner').hidden = true;
   $('eject').hidden = true;
+  $('write-confirmation').hidden = true;
+  $('card-done').hidden = true;
   // A card opened mid-scan replaces identify()'s loop before it reaches progress(total, total, ''),
   // so the old bar has to be cleared here rather than left for a call that may never come.
   $('progress').hidden = true;
@@ -927,6 +933,7 @@ let shelfSortFrame = 0;
 function scheduleShelfSort() {
   if (!shelfSortFrame) shelfSortFrame = requestAnimationFrame(() => {
     shelfSortFrame = 0;
+    if (session) filterShelf();
     if (!session || session.artworkWork?.matching || document.body.classList.contains('loading')) return;
     const ranked = session.carts.map(c => ({c, rank:reviewRank({existingPng:c.existingPng,
       suggestion:c.suggestion, hasMatchedLabel:!!realPathOf(c) && !realOf(c)?.failed})}))
@@ -955,10 +962,28 @@ function renderTabs() {
 
 // Switching hides the other shelves rather than rebuilding the grid: a cart keeps its canvas, its
 // chosen colour and any logo dropped on it, so coming back to a tab finds it as it was left.
+function filterShelf() {
+  if (!session) return;
+  const query = $('cart-query').value.trim();
+  let shown = 0;
+  for (const c of session.carts) {
+    const visible = query ? cartMatches(c, query) : c.platform === session.platform;
+    c.el.root.hidden = !visible;
+    if (visible) shown++;
+  }
+  $('cart-search-clear').hidden = !query;
+  $('cart-search-count').textContent = query
+    ? `${shown} of ${session.carts.length} games · All systems`
+    : `${shown} game${shown === 1 ? '' : 's'} · ${PLATFORM_NAMES[session.platform] ?? session.platform}`;
+  $('cart-search-empty').hidden = !query || shown > 0;
+  $('bulk-all').textContent = query ? 'Select results' : 'Select this system';
+}
+
 function showPlatform(p) {
   editor.close();
   session.platform = p;
-  for (const c of session.carts) c.el.root.hidden = c.platform !== p;
+  $('cart-query').value = '';
+  filterShelf();
   renderTabs();
   updateBulk();
 }
@@ -1067,9 +1092,31 @@ function updateWriteBar() {
   const n = readyCarts().length + shellChanges().length;
   $('write-bar').hidden = n === 0 && !writing && $('eject').hidden;
   // Nothing to write means no button at all.
-  $('write').hidden = n === 0 && !writing;
+  const saved = !!session.savedText;
+  $('write-confirmation').hidden = !saved || writing;
+  $('write-confirmation').textContent = saved && n > 0 ? 'Previous changes saved. You have new changes to write.' : session.savedText ?? '';
+  $('card-done').hidden = !saved || n > 0 || writing;
+  $('card-done').disabled = fatal || !!session.artworkWork?.matching || (session.artworkWork?.labelsDone ?? 0) < (session.artworkWork?.labelsTotal ?? 0);
+  $('write').hidden = n === 0 && !writing && !saved;
   $('write').disabled = n === 0 || writing || fatal || bulkArtworkPending > 0;
-  $('write').textContent = session.source.direct ? 'Write to card' : 'Download labels';
+  $('write').textContent = saved && n === 0 && !writing ? 'Saved to card' : session.source.direct ? 'Write to card' : 'Download labels';
+}
+
+function finishCard() {
+  if (!session?.savedText || writing || fatal || readyCarts().length || shellChanges().length ||
+    session.artworkWork?.matching || (session.artworkWork?.labelsDone ?? 0) < (session.artworkWork?.labelsTotal ?? 0)) return;
+  editor.close();
+  visibility.disconnect();
+  clearInterval(session.artworkWork?.timer);
+  session = null;
+  selecting = false; selectedCarts.clear(); bulkArtworkRevision++;
+  $('grid').replaceChildren();
+  for (const id of ['cart-search','cart-search-empty','tabs','bulk-panel','bulk-open','fill-open','write-bar','how-shelf','progress']) $(id).hidden = true;
+  $('hero').classList.remove('opened');
+  document.body.classList.remove('card-open');
+  banner('Your changes are saved. Eject the SD card in your operating system before removing it.');
+  $('start').focus({preventScroll:true});
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 
 function writeProgress(done, total) {
@@ -1229,6 +1276,7 @@ async function writeLabels() {
   const shells = shellChanges();
   if ((!carts.length && !shells.length) || writing || fatal) return;
   writing = true;
+  s.savedText = null;
   updateBulk(false);
   $('eject').hidden = true;
   updateWriteBar();
@@ -1290,6 +1338,10 @@ async function writeLabels() {
           count.skipped && `${plural(count.skipped, 'label was', 'labels were')} skipped: one turned up on the card meanwhile.`,
           shellNote,
         ].filter(Boolean);
+        if (count.written || count.shells) {
+          s.savedText = `Saved to SD card: ${plural(count.written, 'label', 'labels')}` +
+            (count.shells ? ` and shell settings for ${plural(count.shells, 'game', 'games')}` : '') + '. You can keep editing or choose Done.';
+        }
         if (problems.length) banner(problems.join(' '));
       }
     } else {
@@ -1555,9 +1607,15 @@ async function start() {
       banner(err.message);
     }
   });
+  $('card-done').addEventListener('click', finishCard);
+  $('cart-query').addEventListener('input', filterShelf);
+  $('cart-query').addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); $('cart-query').value = ''; filterShelf(); }
+  });
+  $('cart-search-clear').addEventListener('click', () => { $('cart-query').value = ''; filterShelf(); $('cart-query').focus(); });
   $('bulk-open').addEventListener('click', () => setSelecting(!selecting));
   $('bulk-done').addEventListener('click', () => { setSelecting(false); $('bulk-open').focus(); });
-  $('bulk-all').addEventListener('click', () => { session.carts.filter(c => c.platform === session.platform).forEach(c => selectedCarts.add(c)); updateBulk(); });
+  $('bulk-all').addEventListener('click', () => { session.carts.filter(c => !c.el.root.hidden).forEach(c => selectedCarts.add(c)); updateBulk(); });
   $('bulk-clear').addEventListener('click', () => { selectedCarts.clear(); updateBulk(); });
   for (const id of ['bulk-colour-mode', 'bulk-finish']) $(id).addEventListener('change', () => { applySelectedStyle(); updateBulk(); });
   $('bulk-colour').addEventListener('input', () => { bulkColourGesture ??= {}; applySelectedStyle(bulkColourGesture); });
