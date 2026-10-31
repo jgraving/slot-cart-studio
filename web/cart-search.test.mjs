@@ -6,6 +6,7 @@ test('search finds filenames, matched names and pending suggestions across syste
  for(const q of ['pokemon','EMERALD usa','bpee','pocket gba',''])assert.equal(cartMatches(c,q),true,q);
  assert.equal(cartMatches(c,'emerald gbc'),false);
  assert.equal(cartMatches({stem:'Unknown'},'pokemon'),false);
+ assert.equal(cartMatches({stem:'Style Second',platform:'GBA'},'style gb'),false);
 });
 test('search accepts accents, punctuation and multiple terms in any order',()=>{
  assert.equal(cartMatches({stem:'Pokemon - FireRed (Europe)'},'europe pokémon'),true);
