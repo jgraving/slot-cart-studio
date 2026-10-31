@@ -1091,19 +1091,19 @@ function updateWriteBar() {
   if (!session) return;
   const n = readyCarts().length + shellChanges().length;
   $('write-bar').hidden = n === 0 && !writing && $('eject').hidden;
-  // Nothing to write means no button at all.
+  // Retain a clear completion state after a direct save.
   const saved = !!session.savedText;
   $('write-confirmation').hidden = !saved || writing;
   $('write-confirmation').textContent = saved && n > 0 ? 'Previous changes saved. You have new changes to write.' : session.savedText ?? '';
   $('card-done').hidden = !saved || n > 0 || writing;
-  $('card-done').disabled = fatal || !!session.artworkWork?.matching || (session.artworkWork?.labelsDone ?? 0) < (session.artworkWork?.labelsTotal ?? 0);
+  $('card-done').disabled = fatal || bulkArtworkPending > 0 || session.carts.some(c => c.looking) || !!session.artworkWork?.matching || (session.artworkWork?.labelsDone ?? 0) < (session.artworkWork?.labelsTotal ?? 0);
   $('write').hidden = n === 0 && !writing && !saved;
   $('write').disabled = n === 0 || writing || fatal || bulkArtworkPending > 0;
   $('write').textContent = saved && n === 0 && !writing ? 'Saved to card' : session.source.direct ? 'Write to card' : 'Download labels';
 }
 
 function finishCard() {
-  if (!session?.savedText || writing || fatal || readyCarts().length || shellChanges().length ||
+  if (!session?.savedText || writing || fatal || bulkArtworkPending > 0 || session.carts.some(c => c.looking) || readyCarts().length || shellChanges().length ||
     session.artworkWork?.matching || (session.artworkWork?.labelsDone ?? 0) < (session.artworkWork?.labelsTotal ?? 0)) return;
   editor.close();
   visibility.disconnect();
