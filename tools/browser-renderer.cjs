@@ -198,12 +198,15 @@ const server = http.createServer((req,res) => {
   await page.waitForFunction(()=>window.__studio.idle());
   await page.locator('#ed-tiles [data-kind="real"]').click();
   await page.waitForFunction(()=>window.__studio.idle() && window.__studio.states()[0].wears==='real');
+  await page.locator('#ed-close').click();
   await page.locator('#write').click();
   await page.locator('#write-confirmation').waitFor({state:'visible'});
   if(!(await page.locator('#write-confirmation').textContent()).includes('Saved to SD card: 1 label'))throw Error('Direct write has no saved confirmation');
   if(!(await page.locator('#write').isVisible())||!(await page.locator('#write').isDisabled()))throw Error('Saved write button disappeared or remained active');
+  await page.getByRole('button',{name:'Edit Direct',exact:true}).click();
   await page.locator('#ed-tiles [data-kind="logo"]').click();
   if(await page.locator('#card-done').isVisible())throw Error('Done could discard new edits');
+  await page.locator('#ed-close').click();
   await page.locator('#write').click();
   await page.locator('#card-done').waitFor({state:'visible'});
   await page.locator('#card-done').click();
