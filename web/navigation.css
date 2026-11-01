@@ -1,0 +1,18 @@
+/* Device colors and motion, shared verbatim with Cart Studio. */
+:root{--page:#0e1423;--surface:#171d20;--selected:#334f52;--ink:#f5f9f7;--muted:#c2d6d4;--rule:#35494d;--teal:#54c2b8;--purple:#c3b2ef;--motion-spatial:cubic-bezier(.2,.8,.2,1);--motion-effects:cubic-bezier(.2,0,0,1)}
+:where(.slot-selector){position:relative;isolation:isolate}
+.slot-selector>.selector-surface{position:absolute;z-index:-1;left:0;top:0;width:var(--selector-width,0px);height:var(--selector-height,0px);translate:var(--selector-x,0px) var(--selector-y,0px);border-radius:24px;background:var(--selected);opacity:0;pointer-events:none}
+.slot-selector[data-selector-ready]>.selector-surface{transition:translate 420ms var(--motion-spatial),width 420ms var(--motion-spatial),height 420ms var(--motion-spatial),opacity 180ms var(--motion-effects)}
+.slot-selector a.selector-link{text-decoration:none;font-variation-settings:"ROND" 25;transition:color 180ms var(--motion-effects)}
+/* Theme hover fills yield to the single moving surface. */
+.slot-selector[data-selector-ready] a.selector-link{background:transparent!important}
+.slot-selector a.selector-link:hover,.slot-selector a.selector-link:focus-visible{color:var(--ink)}
+.mast-tabs .md-tabs__item--active{border-bottom:0}
+.mast-tabs .md-tabs__link{text-decoration:none}
+.md-sidebar--primary .md-nav--primary a.md-nav__link{min-height:44px;align-items:center;padding:8px 12px;border-radius:22px;text-decoration:none}
+.md-sidebar--primary .md-nav--primary a.md-nav__link--active{color:var(--ink)}
+@media(prefers-reduced-motion:reduce){.slot-selector[data-selector-ready]>.selector-surface,.slot-selector a.selector-link{transition:none!important}}
+
+/* Same 800 / .76 fast spatial spring as the device menu selection. */
+@supports (transition-timing-function:linear(0,1)){:root{--motion-spatial:linear(0.00000, 0.03789, 0.12981, 0.24966, 0.37886, 0.50490, 0.62004, 0.72014, 0.80361, 0.87060, 0.92239, 0.96084, 0.98809, 1.00630, 1.01745, 1.02334, 1.02545, 1.02502, 1.02299, 1.02009, 1.01683, 1.01359, 1.01058, 1.00792, 1.00569, 1.00387, 1.00246, 1.00139, 1.00063, 1.00011, 0.99978, 0.99960, 0.99952, 0.99952, 0.99956, 0.99963, 0.99971, 0.99979, 0.99987, 0.99994, 1.00000)}}
+
