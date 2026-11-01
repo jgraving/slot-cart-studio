@@ -82,3 +82,6 @@ a:focus-visible,button:focus-visible,label.btn:focus-within{outline:2px solid va
 
 
 .mast-mark img{display:block;width:82px;height:auto}
+
+/* The illustration provides the artwork; an oversized glow must not widen the page. */
+.trio::after{display:none}
