@@ -7,6 +7,8 @@
 <meta name="description" content="Find game artwork, design labels and choose cartridge colors for slot.sp.">
 <link rel="stylesheet" href="studio.css">
 <link rel="stylesheet" href="slot-sp.css">
+<link rel="stylesheet" href="navigation.css">
+<script src="navigation.js" defer></script>
 <link rel="icon" href="https://jakegraving.com/slot.sp/favicon.svg">
 <script type="module" src="studio.js"></script>
 </head>
@@ -18,6 +20,7 @@
   </button>
   <nav class="mast-links" id="mast-links" aria-label="slot.sp">
     <a href="https://jakegraving.com/slot.sp/installing/">Install</a>
+    <a href="https://jakegraving.com/slot.sp/updating/">Update</a>
     <a href="https://jakegraving.com/slot.sp/features/guide/">Guide</a>
     <a href="./" aria-current="page">Cart Studio</a>
     <a href="https://jakegraving.com/slot.sp/questions/">About</a>
@@ -42,12 +45,13 @@
         <span class="loader-text" id="loader-text"></span>
         <span class="loader-detail" id="loader-detail" aria-hidden="true"></span>
       </div>
+    <p class="studio-note">Choose the card’s top folder, with Games and Labels inside. <a href="https://jakegraving.com/slot.sp/features/cart-studio/">Read the Studio guide</a>.</p>
+    <p id="startup" role="status">Loading Cart Studio…</p>
     </div>
     <div class="trio" aria-hidden="true">
       <canvas data-platform="GBA"></canvas><canvas data-platform="GBC"></canvas><canvas data-platform="GB"></canvas>
     </div>
-    <p class="studio-note">Choose the card’s top folder, with Games and Labels inside. <a href="https://jakegraving.com/slot.sp/features/cart-studio/">Read the Studio guide</a>.</p>
-    <p id="startup" role="status">Loading Cart Studio…</p>
+
   </header>
 
   <p class="banner" id="banner" role="alert" hidden></p>
@@ -271,3 +275,4 @@
 </template>
 </body>
 </html>
+
