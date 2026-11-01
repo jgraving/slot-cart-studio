@@ -18,7 +18,7 @@
     }
     function place() {
       const focus = links.find(link => link.contains(document.activeElement));
-      const active = links.find(link => visible(link) && (link.matches('[aria-current="page"],.md-nav__link--active') || link.closest('.md-tabs__item--active')));
+      const active = links.find(link => visible(link) && (link.matches('[aria-current],.md-nav__link--active') || link.closest('.md-tabs__item--active')));
       const target = [hovered, focus, active].find(visible);
       surface.style.opacity = target ? '1' : '0';
       if (!target) return;
@@ -65,8 +65,7 @@
       if (typeof ResizeObserver !== 'undefined') new ResizeObserver(measure).observe(header);
       else window.addEventListener('resize', measure);
     }
-    init(document.querySelector('.mast-tabs'), 'a.md-tabs__link', 'slot-header-selector');
-    init(document.querySelector('.mast-links'), 'a', 'slot-header-selector');
+    init(document.querySelector('.mast-tabs,.mast-links'), 'a.mast-link,a.md-tabs__link', 'slot-header-selector');
     init(document.querySelector('.md-sidebar--primary .md-nav--primary'), 'a.md-nav__link[href]', 'slot-guide-selector');
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, {once:true});

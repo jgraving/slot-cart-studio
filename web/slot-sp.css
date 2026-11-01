@@ -80,3 +80,5 @@ a:focus-visible,button:focus-visible,label.btn:focus-within{outline:2px solid va
 #bulk-mode{min-width:2em;color:var(--muted);font-size:13px}.selection-switch[aria-checked="true"] #bulk-mode{color:var(--teal)}
 @media(prefers-reduced-motion:reduce){.switch-track,.switch-track::after{transition:none}}
 
+
+.mast-mark img{display:block;width:82px;height:auto}
