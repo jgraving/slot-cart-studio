@@ -221,6 +221,35 @@ const server = http.createServer((req,res) => {
   await live.goto(`${origin}/art-probe`);
   const source=await live.evaluate(async()=>{const r=await fetch('art/index.json');if(!r.ok)throw Error(`catalog HTTP ${r.status}`);const data=await r.json();const entry=Object.values(data).find(e=>e['support-texture']);if(!entry)throw Error('no scanned labels');const image=await fetch(new URL('art/'+entry['support-texture'],location.href));if(!image.ok)throw Error(`scan HTTP ${image.status}`);const bytes=new Uint8Array(await image.arrayBuffer());if(bytes[0]!==137||bytes[1]!==80)throw Error('not PNG');return {labels:Object.keys(data).length,bytes:bytes.length};});
   console.log('Same-origin scanned-label source:',source);await live.close();
+  // Exercise a WebP-only external collection through the real WASM decoder.
+  const compressed=await browser.newPage({viewport:{width:390,height:844},acceptDownloads:true});
+  compressed.on('pageerror',e=>errors.push(e.message));
+  const compressedRoot=path.join(fixtures,'webp-card');
+  fs.mkdirSync(path.join(compressedRoot,'Games','GBA'),{recursive:true});
+  fs.writeFileSync(path.join(compressedRoot,'Games','GBA','Renderer Probe.gba'),rom);
+  let webpHits=0;
+  await compressed.route('**/compressed-art/**',async route=>{
+   const name=new URL(route.request().url()).pathname;
+   if(name.endsWith('/index.json'))return route.fulfill({json:{[metadata.crc]:{'support-texture':'fixture/label.png',wheel:'fixture/logo.png'}}});
+   if(name.endsWith('/label.webp')){webpHits++;return route.fulfill({contentType:'image/webp',body:fs.readFileSync('tests/fixtures/lossy.webp')});}
+   if(name.endsWith('/logo.png'))return route.fulfill({contentType:'image/png',body:fs.readFileSync(path.join(fixtures,'logo.png'))});
+   return route.fulfill({status:404,body:''});
+  });
+  await compressed.route('https://raw.githubusercontent.com/**',route=>route.fulfill({status:200,contentType:'text/plain',body:`game (\n name "Renderer Probe (USA)"\n rom ( name "Renderer Probe.gba" crc ${metadata.crc} )\n)`}));
+  await compressed.goto(`${origin}/?art=${encodeURIComponent(origin+'/compressed-art/')}`);
+  await compressed.locator('body[data-ready=true]').waitFor();
+  await compressed.locator('#start').click();
+  await compressed.locator('#pick-files').setInputFiles(compressedRoot);
+  await compressed.locator('body.loading').waitFor({state:'hidden'});
+  await compressed.waitForFunction(()=>window.__studio.idle());
+  await compressed.locator('#fill-real').click();
+  await compressed.waitForFunction(()=>window.__studio.idle() && window.__studio.states()[0].wears==='real');
+  if(!webpHits)throw Error('External artwork did not use WebP');
+  const compressedZip=compressed.waitForEvent('download');
+  await compressed.locator('#write').click();
+  await (await compressedZip).saveAs(path.join(fixtures,'webp-labels.zip'));
+  await compressed.screenshot({path:path.join(fixtures,'studio-webp.png'),fullPage:true});
+  await compressed.close();
   if(errors.length)throw Error(errors.join('\n'));
   console.log('PASS: artwork choices, native previews, bulk selection across tabs, mobile layout and ZIP exports');
  }finally{await browser.close();server.close();}

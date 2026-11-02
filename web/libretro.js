@@ -54,7 +54,16 @@ export async function fetchIndex(base) {
   return r.json();
 }
 
-export async function fetchArt(base, path) {
+export async function fetchArt(base, path, { preferWebp = true } = {}) {
+  const webp = path.replace(/\.png$/, '.webp');
+  if (preferWebp && webp !== path) {
+    const bytes = await fetchFile(base, webp);
+    if (bytes) return bytes;
+  }
+  return fetchFile(base, path);
+}
+
+async function fetchFile(base, path) {
   const r = await fetch(new URL(path, base));
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
