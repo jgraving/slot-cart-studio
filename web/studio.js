@@ -171,7 +171,10 @@ const hex = (rgb) => `#${[...rgb].map((v) => v.toString(16).padStart(2, '0')).jo
 const crcHex = (crc) => crc.toString(16).toUpperCase().padStart(8, '0');
 // The published checksum catalog includes scanned labels and logos. ?art= remains
 // available for another CORS-enabled collection (or an empty value to opt out).
-const ART_BASE = new URLSearchParams(location.search).get('art') ?? new URL('art/', location.href).href;
+const ART_OVERRIDE = new URLSearchParams(location.search).get('art');
+const ART_BASE = ART_OVERRIDE ?? new URL('art/', location.href).href;
+// Our same-origin mirror is PNG-only. Avoid a failed WebP probe for every image.
+const fetchArtwork = (path) => fetchArt(ART_BASE, path, { preferWebp: ART_OVERRIDE !== null });
 let artIndex = null;
 let ready = null;
 let extras = extrasFrom(null);
@@ -376,7 +379,7 @@ function withFullLabel(bytes, platform, use) {
 async function showHero() {
   const presets = new Map(Array.from(shell_presets(), (line) => line.split('\t')));
   for (const pick of heroPicks(artIndex)) {
-    const bytes = await fetchArt(ART_BASE, pick.label).catch(() => null);
+    const bytes = await fetchArtwork(pick.label).catch(() => null);
     if (fatal || session) return;
     if (!bytes) continue;
     const canvas = document.querySelector(`.trio [data-platform=${pick.platform}]`);
@@ -516,7 +519,7 @@ function fetchReal(s, c) {
   real.pending = (async () => {
     let bytes = null;
     try {
-      bytes = await limit(async () => (s === session && !fatal ? fetchArt(ART_BASE, path) : null));
+      bytes = await limit(async () => (s === session && !fatal ? fetchArtwork(path) : null));
       if (bytes && !readable(bytes)) bytes = null;
     } catch (e) {
       if (trapped(e)) return;
@@ -906,7 +909,7 @@ async function dress(s, c) {
     const path = key && artIndex?.[key]?.[media];
     if (!path) return Promise.resolve(null);
     return limit(async () =>
-      s === session && !fatal ? fetchArt(ART_BASE, path) : null,
+      s === session && !fatal ? fetchArtwork(path) : null,
     ).catch(noImage);
   };
   // The ground's colour is read off the box art, so that request starts now and is waited on

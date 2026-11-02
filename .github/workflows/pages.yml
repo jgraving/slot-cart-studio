@@ -76,12 +76,14 @@ jobs:
           python3 - <<'PYTEST'
           from pathlib import Path
           import zipfile, struct
-          with zipfile.ZipFile(Path(__import__('os').environ['RUNNER_TEMP']) / 'studio-previews' / 'labels.zip') as zipped:
-              images = [n for n in zipped.namelist() if n.endswith('.png')]
-              assert images
-              for name in images:
-                  data = zipped.read(name)
-                  assert data[25] == 6, (name, 'cleaned label must keep RGBA transparency')
+          for archive in ('labels.zip', 'webp-labels.zip'):
+              with zipfile.ZipFile(Path(__import__('os').environ['RUNNER_TEMP']) / 'studio-previews' / archive) as zipped:
+                  images = [n for n in zipped.namelist() if n.endswith('.png')]
+                  assert images
+                  for name in images:
+                      data = zipped.read(name)
+                      assert data.startswith(b'\x89PNG\r\n\x1a\n'), (archive, name)
+                      assert data[25] == 6, (name, 'cleaned label must keep RGBA transparency')
           PYTEST
       - uses: actions/upload-artifact@v7
         if: always()
