@@ -213,6 +213,29 @@ const server = http.createServer((req,res) => {
   if(await page.locator('#grid .cart').count())throw Error('Done did not close the card');
   if(!(await page.locator('#start').isVisible()))throw Error('Done did not return to the start');
   if(!(await page.locator('#banner').textContent()).includes('Eject the SD card'))throw Error('Done lost the eject reminder');
+  // Same-title region/hack variants stay distinguishable when editing or bulk-selecting.
+  await page.setViewportSize({width:390,height:844});
+  const variants=path.join(fixtures,'variants','Games','GBA');
+  fs.mkdirSync(variants,{recursive:true});
+  for(const stem of ['Variant (USA)','Variant (Europe)'])fs.writeFileSync(path.join(variants,`${stem}.gba`),rom);
+  await page.locator('#pick-files').setInputFiles(path.join(fixtures,'variants'));
+  await page.locator('body.loading').waitFor({state:'hidden'});
+  await page.waitForFunction(()=>window.__studio.idle());
+  if(await page.locator('#fill').isVisible())await page.locator('#fill-logo').click();
+  for(const stem of ['Variant (USA)','Variant (Europe)']) {
+   const cart=page.getByRole('button',{name:`Edit ${stem}`,exact:true});
+   if(await cart.locator('.file').textContent()!==stem)throw Error('Duplicate title is missing its filename');
+  }
+  await page.getByRole('button',{name:'Edit Variant (USA)',exact:true}).click();
+  if(!(await page.locator('#ed-info').textContent()).includes('Variant (USA)'))throw Error('Editor is missing its filename');
+  await page.locator('#ed-close').click();
+  await page.locator('#bulk-open').click();
+  await page.getByRole('button',{name:'Select Variant (Europe)',exact:true}).click();
+  if(await page.locator('#bulk-count').textContent()!=='1 cart selected')throw Error('Duplicate title selection was lost');
+  await page.locator('#bulk-open').click();
+  await page.getByRole('button',{name:'Edit Variant (USA)',exact:true}).waitFor({state:'visible'});
+  if(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth))throw Error('Duplicate filenames overflow mobile viewport');
+  await page.screenshot({path:path.join(fixtures,'studio-filename-variants.png'),fullPage:true});
   // The smoke mirror contains real public scans downloaded by the build. Read it
   // through our own origin, exactly as the published site will serve it.
   const live=await browser.newPage();

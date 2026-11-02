@@ -28,7 +28,7 @@ import init, {
 import { cartMatches } from './cart-search.js';
 import { suggestName, titleWords, reviewRank } from './match-review.js';
 import { LoadProgress } from './load-progress.js';
-import { fromDirectory, fromFiles, labelKey, PLATFORMS } from './card.js';
+import { fromDirectory, fromFiles, labelKey, PLATFORMS, twins } from './card.js';
 import { fetchArt, fetchDat, fetchIndex, fetchThumb, limiter } from './libretro.js';
 import { applyBulkStyle, applyBulkArtwork } from './bulk-style.js';
 import { createEditor } from './editor.js';
@@ -301,7 +301,9 @@ function describe(c, state) {
   return '';
 }
 
-function buildCard(c) {
+const cartName = (c) => c.twinned ? c.stem : clean_label(c.stem);
+
+function buildCard(c, twinned) {
   const root = $('card-tpl').content.firstElementChild.cloneNode(true);
   const q = (selector) => root.querySelector(selector);
   c.el = { root, canvas: q('canvas'), face: q('.face'), stem: q('.stem'), game: q('.game') };
@@ -318,7 +320,9 @@ function buildCard(c) {
     .flatMap((group) => group.split(','))
     .map((tag) => tag.trim())
     .filter(Boolean);
-  root.setAttribute('aria-label', `Edit ${clean_label(c.stem)}`);
+  c.twinned = twinned;
+  if (twinned) q('.file').textContent = c.stem;
+  root.setAttribute('aria-label', `Edit ${cartName(c)}`);
   root.addEventListener('click', () => activateCart(c));
   root.addEventListener('keydown', (e) => {
     if (e.target !== root || (e.key !== 'Enter' && e.key !== ' ')) return;
@@ -673,7 +677,8 @@ async function open(source) {
   // so the old bar has to be cleared here rather than left for a call that may never come.
   $('progress').hidden = true;
   $('progress-text').textContent = '';
-  $('grid').replaceChildren(...session.carts.map(buildCard));
+  const alike = twins(session.carts, (c) => clean_label(c.stem));
+  $('grid').replaceChildren(...session.carts.map((c) => buildCard(c, alike.has(c))));
   session.carts.forEach(paint);
   showPlatform(platformsOf(session)[0] ?? PLATFORMS[0]);
   $('write-bar').hidden = true;
@@ -871,6 +876,7 @@ function infoOf(c) {
   const code = smallPrint(c.platform, c.code, c.tags) || c.code;
   const key = artKey(c);
   return [
+    ['File', c.stem],
     ['Product Code', code],
     ['CRC', c.crc === null ? '' : crcHex(c.crc)],
     ['Game', c.game && !c.rejected ? c.game : 'No match'],
@@ -1019,7 +1025,7 @@ function updateBulk(refreshCards = true) {
   for (const c of session.carts) {
     c.el.root.classList.toggle('selected', selectedCarts.has(c));
     c.el.root.classList.toggle('selectable', selecting);
-    c.el.root.setAttribute('aria-label', `${selecting ? 'Select' : 'Edit'} ${clean_label(c.stem)}`);
+    c.el.root.setAttribute('aria-label', `${selecting ? 'Select' : 'Edit'} ${cartName(c)}`);
     if (selecting) c.el.root.setAttribute('aria-pressed', String(selectedCarts.has(c)));
     else c.el.root.removeAttribute('aria-pressed');
   }
