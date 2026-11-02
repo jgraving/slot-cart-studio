@@ -51,7 +51,7 @@ pub(crate) fn cover_label(path: &Path, w: u32, h: u32) -> Option<Vec<u8>> {
 }
 
 // Share the device's decoder, alpha-aware resizer and SVG renderer.
-pub(crate) use crate::device_art::{cover_rgba, render_svg};
+pub(crate) use crate::device_art::{cover_rgba, decode_png_bytes, render_svg};
 
 /// Downloaded artwork may be WebP. Label composition always exports PNG for the device.
 pub(crate) fn decode(bytes: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
