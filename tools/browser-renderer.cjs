@@ -236,8 +236,7 @@ const server = http.createServer((req,res) => {
   await page.getByRole('button',{name:'Edit Variant (USA)',exact:true}).waitFor({state:'visible'});
   if(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth))throw Error('Duplicate filenames overflow mobile viewport');
   await page.screenshot({path:path.join(fixtures,'studio-filename-variants.png'),fullPage:true});
-  // The smoke mirror contains real public scans downloaded by the build. Read it
-  // through our own origin, exactly as the published site will serve it.
+  // Read the synthetic same-origin fixture prepared by the build.
   const live=await browser.newPage();
   const origin=`http://127.0.0.1:${server.address().port}`;
   await live.route(`${origin}/art-probe`,r=>r.fulfill({contentType:'text/html',body:'<!doctype html><title>Artwork source probe</title>'}));
@@ -273,6 +272,38 @@ const server = http.createServer((req,res) => {
   await (await compressedZip).saveAs(path.join(fixtures,'webp-labels.zip'));
   await compressed.screenshot({path:path.join(fixtures,'studio-webp.png'),fullPage:true});
   await compressed.close();
+  // The deployment switch must keep imports, appearance edits and export usable
+  // without any catalog or thumbnail image request, including an ?art override.
+  const local = await browser.newPage({acceptDownloads:true});
+  local.on('pageerror', e=>errors.push(e.message));
+  let unexpectedImages = 0;
+  await local.route('**/studio.js', route=>route.fulfill({contentType:'text/javascript',body:fs.readFileSync(path.join(root,'studio.js'),'utf8').replace('const REMOTE_ARTWORK = true;','const REMOTE_ARTWORK = false;')}));
+  await local.route('**/art/**', route=>{unexpectedImages++;return route.fulfill({status:404});});
+  await local.route('https://raw.githubusercontent.com/**', route=>{
+    if(route.request().url().endsWith('.dat'))return route.fulfill({contentType:'text/plain',body:`game (\n name "Renderer Probe (USA)"\n rom ( name "Renderer Probe.gba" crc ${metadata.crc} )\n)`});
+    unexpectedImages++;return route.fulfill({status:404});
+  });
+  await local.goto(`${origin}/?art=${encodeURIComponent(origin+'/art/')}`);
+  await local.locator('body[data-ready=true]').waitFor();
+  await local.locator('.trio canvas.in').nth(2).waitFor();
+  if(await local.evaluate(()=>window.__studio.artBase())!=='')throw Error('Local deployment accepted an artwork override');
+  await local.locator('#start').click();
+  await local.locator('#pick-files').setInputFiles(path.join(fixtures,'card'));
+  await local.locator('body.loading').waitFor({state:'hidden'});
+  await local.getByRole('button',{name:'Edit Renderer Probe',exact:true}).click();
+  await local.waitForFunction(()=>window.__studio.idle());
+  const custom = local.waitForEvent('filechooser');
+  await local.locator('#ed-tiles [data-kind="customLabel"]').click();
+  await (await custom).setFiles(path.join(fixtures,'GBA-scan.png'));
+  await local.locator('#ed-tiles [data-kind="customLabel"][aria-pressed="true"]').waitFor();
+  await local.locator('#ed-finish [data-value="clear"]').click();
+  await local.locator('#ed-close').click();
+  const localZip = local.waitForEvent('download');
+  await local.locator('#write').click();
+  await (await localZip).saveAs(path.join(fixtures,'local-labels.zip'));
+  if(unexpectedImages)throw Error(`Local deployment requested ${unexpectedImages} catalog/thumbnail assets`);
+  await local.screenshot({path:path.join(fixtures,'studio-local-import.png'),fullPage:true});
+  await local.close();
   if(errors.length)throw Error(errors.join('\n'));
   console.log('PASS: artwork choices, native previews, bulk selection across tabs, mobile layout and ZIP exports');
  }finally{await browser.close();server.close();}

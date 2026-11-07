@@ -1,6 +1,6 @@
 # 🎨 Cart Studio for slot.sp
 
-**[Open Cart Studio](https://jakegraving.com/slot.sp/studio/)** · **[slot.sp](https://jakegraving.com/slot.sp/)** · **[User guide](https://jakegraving.com/slot.sp/features/cart-studio/)**
+**[slot.sp](https://jakegraving.com/slot.sp/)** · **[User guide](https://jakegraving.com/slot.sp/features/cart-studio/)**
 
 Find artwork for your games, design cartridge labels and choose colors and finishes. Preview your changes before saving them to the card.
 
@@ -26,7 +26,9 @@ wasm-pack build --release --target web --no-typescript --out-dir web/pkg
 cp LICENSE web/LICENSE
 ```
 
-Studio loads scanned labels and logos from the site’s own `studio/art/` collection. The site build mirrors the public catalog at `https://art.slot-cfw.fyi/`, preserving image dimensions and transparency while optimizing PNG storage. This avoids the upstream host’s cross-origin restriction. Libretro remains a logo fallback where available. Missing label/logo choices open a local PNG picker; explicit single-cart choices do not silently switch styles. Another scanned-label collection can be selected with `?art=https://your-art-host/`; that host must allow the Studio origin through CORS.
+The welcome screen uses original local demo labels. These remain available when the artwork catalog is disabled.
+
+Artwork lookup can be disabled at assembly time with `REMOTE_ARTWORK`. The slot.sp website publishes the editor for local PNG imports and appearance editing, without a hosted artwork catalog or automatic image downloads. Automatic artwork lookup is available in the on-device editor. The welcome screen uses original local demo labels.
 
 The web theme uses the self-hosted Google Sans Flex from the slot.sp website. See the renderer's font licenses for its preview text.
 
