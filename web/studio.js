@@ -38,7 +38,7 @@ import { hasLog, logError, logText } from './log.js';
 import { applyFill, autoFill, available, fillCounts, fillText, wears } from './label-choice.js';
 import { extrasFrom } from './extras.js';
 import { fingerprintCache, fingerprintKey, readFingerprint, scanLimited } from './scan.js';
-import { heroPicks, heroShell } from './hero.js';
+import { HERO_DEMOS } from './hero.js';
 
 const $ = (id) => document.getElementById(id);
 const limit = limiter(4);
@@ -171,9 +171,10 @@ const hex = (rgb) => `#${[...rgb].map((v) => v.toString(16).padStart(2, '0')).jo
 const crcHex = (crc) => crc.toString(16).toUpperCase().padStart(8, '0');
 // The published checksum catalog includes scanned labels and logos. ?art= remains
 // available for another CORS-enabled collection (or an empty value to opt out).
+const REMOTE_ARTWORK = true;
 const ART_OVERRIDE = new URLSearchParams(location.search).get('art');
-const ART_BASE = ART_OVERRIDE ?? new URL('art/', location.href).href;
-// Our same-origin mirror is PNG-only. Avoid a failed WebP probe for every image.
+const ART_BASE = REMOTE_ARTWORK ? (ART_OVERRIDE ?? new URL('art/', location.href).href) : '';
+// Default PNG collections avoid unnecessary WebP probes.
 const fetchArtwork = (path) => fetchArt(ART_BASE, path, { preferWebp: ART_OVERRIDE !== null });
 let artIndex = null;
 let ready = null;
@@ -377,16 +378,17 @@ function withFullLabel(bytes, platform, use) {
 }
 
 async function showHero() {
-  const presets = new Map(Array.from(shell_presets(), (line) => line.split('\t')));
-  for (const pick of heroPicks(artIndex)) {
-    const bytes = await fetchArtwork(pick.label).catch(() => null);
+  for (const pick of HERO_DEMOS) {
+    const bytes = await fetch(new URL(pick.label, import.meta.url))
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.arrayBuffer(); })
+      .then(buffer => new Uint8Array(buffer)).catch(() => null);
     if (fatal || session) return;
     if (!bytes) continue;
     const canvas = document.querySelector(`.trio [data-platform=${pick.platform}]`);
     const [w, h] = boxOf(pick.platform);
     try {
       withFullLabel(bytes, pick.platform, (label) => {
-        const face = label.face(pick.platform, '', new Uint8Array(0), heroShell(pick.platform, pick.preset, presets), '');
+        const face = label.face(pick.platform, '', new Uint8Array(0), pick.shell, '');
         canvas.width = w;
         canvas.height = h;
         drawFace(canvas, face, pick.platform);
@@ -899,7 +901,7 @@ async function dress(s, c) {
   // The queue is shared, so a card replaced while its jobs wait gives up their turns without
   // a request instead of making the new card wait behind its downloads.
   const thumb = (folder) =>
-    !name
+    !REMOTE_ARTWORK || !name
       ? Promise.resolve(null)
       : limit(async () =>
           s === session && !fatal ? fetchThumb(c.platform, folder, name, stub_target) : null,

@@ -47,7 +47,9 @@ pub(crate) fn cover_label(path: &Path, w: u32, h: u32) -> Option<Vec<u8>> {
         Stashed::Rgba { px, w, h } => Some((px.clone(), *w, *h)),
     })?;
     crate::label_mask::clear_corner_background(&mut src, sw, sh);
-    cover_rgba(&src, sw, sh, w, h)
+    let mut art = cover_rgba(&src, sw, sh, w, h)?;
+    crate::label_mask::round_sharp_corners(&mut art, w, h);
+    Some(art)
 }
 
 // Share the device's decoder, alpha-aware resizer and SVG renderer.
