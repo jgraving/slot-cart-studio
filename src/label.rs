@@ -730,14 +730,14 @@ mod tests {
     }
 
     #[test]
-    fn a_full_label_shows_on_the_cart_face_to_its_corners() {
+    fn a_full_label_keeps_its_interior_inside_the_devices_rounded_corners() {
         let label =
             Label::full(&png_of(&solid(512, 256), 512, 256), Platform::Gba).expect("decodes");
         let face = label.face(Platform::Gba, "", &[], "", "Probe");
-        let (x0, y0) = (crate::cart::LABEL_X + 1, crate::cart::LABEL_Y + 1);
+        let (x0, y0) = (crate::cart::LABEL_X + 12, crate::cart::LABEL_Y + 12);
         let (x1, y1) = (
-            crate::cart::LABEL_X + crate::cart::LABEL_W - 2,
-            crate::cart::LABEL_Y + crate::cart::LABEL_H - 2,
+            crate::cart::LABEL_X + crate::cart::LABEL_W - 13,
+            crate::cart::LABEL_Y + crate::cart::LABEL_H - 13,
         );
         for (x, y) in [(x0, y0), (x1, y0), (x0, y1), (x1, y1)] {
             let i = ((y * crate::cart::CART_W + x) * 4) as usize;
